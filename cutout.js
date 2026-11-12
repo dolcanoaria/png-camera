@@ -4,7 +4,7 @@
   const canvas = $("cutout-canvas"), ctx = canvas.getContext("2d", {willReadFrequently:true});
   const source = document.createElement("canvas"), sctx = source.getContext("2d", {willReadFrequently:true});
   const mask = document.createElement("canvas"), mctx = mask.getContext("2d", {willReadFrequently:true});
-  const state = { loaded:false, mode:"erase", down:false, last:null, undo:[], sourceName:"character", selecting:false, selection:null, anchor:null, aiBusy:false };
+  const state = { loaded:false, mode:"erase", down:false, last:null, undo:[], sourceName:"character", selecting:false, selection:null, anchor:null, aiBusy:false, lasso:false, lassoPoints:[] };
   const message = (s) => { $("cutout-status").textContent=s; };
   const limit = 1600;
   const setSize = (w,h) => { for (const c of [canvas,source,mask]) { c.width=w;c.height=h; } };
@@ -15,6 +15,13 @@
     ctx.globalCompositeOperation="destination-in";
     ctx.drawImage(mask,0,0);
     ctx.globalCompositeOperation="source-over";
+    if (state.lassoPoints.length) {
+      ctx.save();ctx.strokeStyle="#ffb02e";ctx.lineWidth=Math.max(2,canvas.width/450);ctx.setLineDash([9,5]);
+      ctx.beginPath();ctx.moveTo(state.lassoPoints[0].x,state.lassoPoints[0].y);
+      for(const p of state.lassoPoints.slice(1))ctx.lineTo(p.x,p.y);
+      if(!state.down && state.lassoPoints.length>2)ctx.closePath();
+      ctx.stroke();ctx.restore();
+    }
     if (state.selection) {
       const b=state.selection;
       ctx.save();ctx.strokeStyle="#00d9ff";ctx.lineWidth=Math.max(2,canvas.width/500);ctx.setLineDash([12,7]);
@@ -74,12 +81,18 @@
     if(!state.loaded)return;
     ev.preventDefault();canvas.setPointerCapture(ev.pointerId);
     const p=position(ev);
+    if(state.lasso) {state.down=true;state.lassoPoints=[p];render();return;}
     if(state.selecting) {state.anchor=p;state.selection={x:p.x,y:p.y,w:0,h:0};render();return;}
     snapshot();
     if(state.mode==="auto") { removeConnectedBackground(p);return; }
     state.down=true;state.last=p;brush(p,p);
   });
   canvas.addEventListener("pointermove",ev=>{
+    if(state.lasso && state.down){
+      ev.preventDefault();const p=position(ev),last=state.lassoPoints[state.lassoPoints.length-1];
+      if(Math.hypot(p.x-last.x,p.y-last.y)>Math.max(2,canvas.width/400)){state.lassoPoints.push(p);render();}
+      return;
+    }
     if(state.selecting && state.anchor){
       ev.preventDefault();const p=position(ev),a=state.anchor;
       state.selection={x:Math.min(a.x,p.x),y:Math.min(a.y,p.y),w:Math.abs(a.x-p.x),h:Math.abs(a.y-p.y)};
@@ -88,7 +101,22 @@
     if(!state.down)return;
     ev.preventDefault();const p=position(ev);brush(state.last,p);state.last=p;
   });
+  function eraseLasso() {
+    const points=state.lassoPoints;
+    state.down=false;state.lasso=false;
+    if(points.length<3){state.lassoPoints=[];render();message("囲みが短すぎます。もう一度、大きく囲んでください。");return;}
+    // Erase only pixels inside the closed freehand polygon, leaving all other pixels intact.
+    snapshot();
+    mctx.save();mctx.globalCompositeOperation="destination-out";
+    mctx.fillStyle="rgba(0,0,0,1)";
+    mctx.beginPath();mctx.moveTo(points[0].x,points[0].y);
+    for(let i=1;i<points.length;i++)mctx.lineTo(points[i].x,points[i].y);
+    mctx.closePath();mctx.fill();mctx.restore();
+    state.lassoPoints=[];render();
+    message("囲んだ部分を透明にしました。間違えた場合は『元に戻す』を押してください。");
+  }
   const stop=()=>{
+    if(state.lasso){eraseLasso();return;}
     if(state.selecting && state.anchor){state.anchor=null;state.selecting=false;
       $("cutout-ai-run").disabled=!(state.selection && state.selection.w>10 && state.selection.h>10);
       message("囲む範囲を指定しました。『AIで切り抜く』を押してください。");render();
@@ -104,14 +132,14 @@
       setSize(Math.max(1,Math.round(bitmap.width*ratio)),Math.max(1,Math.round(bitmap.height*ratio)));
       sctx.clearRect(0,0,source.width,source.height);sctx.drawImage(bitmap,0,0,source.width,source.height);bitmap.close();
       mctx.globalCompositeOperation="source-over";mctx.fillStyle="white";mctx.fillRect(0,0,mask.width,mask.height);
-      state.loaded=true;state.undo=[];state.selection=null;state.selecting=false;$("cutout-ai-select").disabled=false;$("cutout-ai-run").disabled=true;state.sourceName=file.name.replace(/\.[^.]+$/,"");
+      state.loaded=true;state.undo=[];state.selection=null;state.selecting=false;state.lasso=false;state.lassoPoints=[];$("cutout-ai-select").disabled=false;$("cutout-ai-run").disabled=true;state.sourceName=file.name.replace(/\.[^.]+$/,"");
       $("cutout-undo").disabled=true;$("cutout-save").disabled=false;$("cutout-register").disabled=false;
       render();message("写真を読み込みました。『背景をタップ』で背景色のつながった領域を消すか、消しゴムで不要部分をなぞってください。");
     } catch {message("画像を開けませんでした。JPEGまたはPNGを選んでください。");}
   });
   $("cutout-ai-select").addEventListener("click",()=>{
     if(!state.loaded || state.aiBusy)return;
-    state.selecting=true;state.selection=null;$("cutout-ai-run").disabled=true;
+    state.lasso=false;state.lassoPoints=[];state.selecting=true;state.selection=null;$("cutout-ai-run").disabled=true;
     message("キャラクター全体を指で四角く囲んでください。少し余白を入れると切れにくくなります。");render();
   });
   $("cutout-ai-run").addEventListener("click",async()=>{
@@ -236,12 +264,28 @@
       message(`AI切り抜き失敗：${detail}。この表示を教えてください。手動編集は引き続き利用できます。`);
     }finally{state.aiBusy=false;$("cutout-ai-select").disabled=false;$("cutout-ai-run").disabled=!state.selection;}
   });
+  // Add the lasso control alongside the existing AI selection control, without
+  // changing the established page layout or requiring an index.html update.
+  const lassoButton=document.createElement("button");
+  lassoButton.type="button";lassoButton.id="cutout-lasso";
+  lassoButton.textContent="囲んで透明化";
+  lassoButton.title="不要な部分を指で囲んで離すと、内側をまとめて透明にします";
+  lassoButton.disabled=true;
+  $("cutout-ai-select").insertAdjacentElement("afterend",lassoButton);
+  $("cutout-file").addEventListener("change",()=>{lassoButton.disabled=false;});
+  lassoButton.addEventListener("click",()=>{
+    if(!state.loaded || state.aiBusy)return;
+    state.selecting=false;state.anchor=null;state.selection=null;
+    $("cutout-ai-run").disabled=true;
+    state.lasso=true;state.down=false;state.lassoPoints=[];
+    message("消したい部分を指で一筆書きで囲み、指を離してください。囲んだ内側だけ透明になります。");render();
+  });
   $("cutout-mode").addEventListener("change",ev=>{state.mode=ev.target.value;});
   $("cutout-undo").addEventListener("click",()=>{
     const previous=state.undo.pop();if(!previous)return;mctx.putImageData(previous,0,0);render();$("cutout-undo").disabled=!state.undo.length;
   });
   $("cutout-reset").addEventListener("click",()=>{
-    if(!state.loaded)return;state.selection=null;state.selecting=false;$("cutout-ai-run").disabled=true;snapshot();mctx.clearRect(0,0,mask.width,mask.height);mctx.fillStyle="white";mctx.fillRect(0,0,mask.width,mask.height);render();message("切り抜きをリセットしました。");
+    if(!state.loaded)return;state.selection=null;state.selecting=false;state.lasso=false;state.lassoPoints=[];$("cutout-ai-run").disabled=true;snapshot();mctx.clearRect(0,0,mask.width,mask.height);mctx.fillStyle="white";mctx.fillRect(0,0,mask.width,mask.height);render();message("切り抜きをリセットしました。");
   });
   async function pngBlob() {return new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("PNG生成失敗")),"image/png"));}
   function downloadBlob(blob,name) {
