@@ -8,26 +8,50 @@
 <title>透過PNGカメラ</title>
 <link rel="stylesheet" href="style.css">
 <script defer src="camera.js"></script>
+<script defer src="library.js"></script>
 </head>
 <body>
 <main>
 <header><h1>透過PNGカメラ</h1><p>撮影と合成は端末内で行います。</p></header>
+<div class="controls" role="group" aria-label="背景の選択">
+<button id="camera">背面カメラを起動</button>
+<label class="picker">背景写真を選ぶ<input id="background-file" type="file" accept="image/*" aria-label="背景にする写真を選ぶ"></label>
+<button id="clear-background" disabled>写真を外す</button>
+</div>
 <section class="view" aria-label="撮影プレビュー">
 <video id="video" muted playsinline hidden></video>
-<canvas id="preview" width="720" height="960" aria-label="カメラとPNGの合成プレビュー"></canvas>
-<div id="empty">カメラを起動して撮影を始める</div>
+<canvas id="preview" width="720" height="960" aria-label="カメラまたは写真とPNGの合成プレビュー"></canvas>
+<div id="empty">カメラを起動するか背景写真を選んでください</div>
 </section>
 <div class="controls">
-<button id="camera">背面カメラを起動</button>
-<label class="picker">透過PNGを選ぶ<input id="file" type="file" aria-label="フォルダをたどって透過PNGを選ぶ"></label>
-<button id="reset" disabled>配置を戻す</button>
-<button id="remove" disabled>PNGを外す</button>
-<button id="capture" disabled>撮影して保存</button>
+<label class="picker">透過PNGを追加<input id="file" type="file" accept="image/png,.png" aria-label="透過PNGを追加"></label>
+<label class="layer-picker">操作するキャラ<select id="layer-select" aria-label="操作するキャラクター"></select></label>
+<button id="front" disabled>一番手前へ</button>
+<button id="back" disabled>一番奥へ</button>
+<button id="reset" disabled>選択中の配置を戻す</button>
+<button id="remove" disabled>選択中を外す</button>
+<button id="capture" disabled>合成写真を保存</button>
 <a id="download" hidden>写真をもう一度保存</a>
 </div>
-<p class="hint">1本指で移動。2本指で拡大・縮小、回転。</p>
+<p class="hint">キャラをタップして選択。1本指で移動、2本指で拡大・縮小・回転。最大3人まで追加できます。選択枠は保存画像に入りません。</p>
 <p id="status" role="status"></p>
+<section class="library" aria-label="作品別キャラクターライブラリ">
+<h2>作品別キャラクターライブラリ</h2>
+<p class="hint">端末内に保存したPNGを選んで追加できます。既存のライブラリは引き継がれます。</p>
+<div class="library-selects">
+<label>作品<select id="work"></select></label>
+<label>キャラクター<select id="character"></select></label>
+<button id="use-character">選択したキャラを追加</button>
+</div>
+<details>
+<summary>キャラクターを登録する</summary>
+<label class="picker">作品別フォルダをまとめて取り込む<input id="folder" type="file" webkitdirectory multiple aria-label="作品別フォルダを取り込む"></label>
+<p class="hint">「キャラ」フォルダを選ぶと、その下の作品別フォルダからPNGを登録します。</p>
+<label>作品名<input id="work-name" type="text" placeholder="例：文豪ストレイドッグス"></label>
+<label class="picker">この作品にPNGを登録<input id="work-files" type="file" accept="image/png,.png" multiple aria-label="指定作品へPNGを登録"></label>
+</details>
+<p id="library-status" role="status"></p>
+</section>
 </main>
 </body>
 </html>
-
