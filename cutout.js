@@ -151,11 +151,50 @@
       const result=document.createElement("canvas");result.width=w;result.height=h;
       const rctx=result.getContext("2d");rctx.drawImage(bitmap,0,0,w,h);bitmap.close();
       const rgba=rctx.getImageData(0,0,w,h);
-      for(let i=0;i<rgba.data.length;i+=4){rgba.data[i]=255;rgba.data[i+1]=255;rgba.data[i+2]=255;}
+      // Improve the AI alpha matte without changing any source RGB colors.
+      // Strong foreground pixels become opaque; uncertain edge pixels stay feathered.
+      const rw=w,rh=h,alpha=new Uint8Array(rw*rh);
+      for(let p=0;p<alpha.length;p++){
+        const a=rgba.data[p*4+3]/255;
+        const t=Math.max(0,Math.min(1,(a-0.12)/0.68));
+        alpha[p]=Math.round(255*t*t*(3-2*t));
+      }
+      // Remove near-white backing connected to the crop border, but never
+      // remove enclosed white highlights or disconnected light clothing.
+      const srcPixels=sctx.getImageData(x,y,w,h).data;
+      const visited=new Uint8Array(rw*rh);
+      const queue=new Int32Array(rw*rh);
+      let head=0,tail=0;
+      const isBacking=(p)=>{
+        const k=p*4,r=srcPixels[k],g=srcPixels[k+1],b=srcPixels[k+2];
+        const hi=Math.max(r,g,b),lo=Math.min(r,g,b);
+        return lo>=196 && hi-lo<=39;
+      };
+      const enqueue=(p)=>{
+        if(visited[p])return;
+        visited[p]=1;
+        if(isBacking(p))queue[tail++]=p;
+      };
+      for(let xx=0;xx<rw;xx++){enqueue(xx);enqueue((rh-1)*rw+xx);}
+      for(let yy=0;yy<rh;yy++){enqueue(yy*rw);enqueue(yy*rw+rw-1);}
+      while(head<tail){
+        const p=queue[head++];alpha[p]=0;
+        const xx=p%rw;
+        if(xx>0)enqueue(p-1);
+        if(xx+1<rw)enqueue(p+1);
+        if(p>=rw)enqueue(p-rw);
+        if(p+rw<rw*rh)enqueue(p+rw);
+      }
+      // Keep the editable mask white; only its alpha channel controls cutout.
+      for(let p=0;p<alpha.length;p++){
+        const k=p*4;
+        rgba.data[k]=255;rgba.data[k+1]=255;rgba.data[k+2]=255;
+        rgba.data[k+3]=alpha[p];
+      }
       rctx.putImageData(rgba,0,0);
       mctx.drawImage(result,x,y);
       state.selection=null;render();
-      message("AI切り抜きが完了しました。輪郭を確認し、必要に応じて消しゴム・復元ブラシで修正してください。");
+      message("AI切り抜きが完了しました（内部の不透明度補正・外周の白背景除去を適用）。輪郭を確認し、必要に応じてブラシで修正してください。");
     }catch(err){
       console.error("AI cutout error",err);
       const detail=String(err?.stack || err?.message || err || "原因不明").slice(0,500);
