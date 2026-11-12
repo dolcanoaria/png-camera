@@ -137,8 +137,11 @@
       crop.width=Math.max(1,Math.round(w*scale));crop.height=Math.max(1,Math.round(h*scale));
       crop.getContext("2d").drawImage(source,x,y,w,h,0,0,crop.width,crop.height);
       const input=await new Promise((resolve,reject)=>crop.toBlob(blob=>blob?resolve(blob):reject(new Error("画像変換失敗")),"image/png"));
-      message("③ AIモデルを取得・初期化しています。初回は時間がかかります…");
-      const output=await removeBackground(input,{progress:(key,current,total)=>{
+      message("③ AIモデルとWASMを指定CDNから取得・初期化しています…");
+      // The ESM CDN bundle cannot reliably infer where its separately fetched
+      // WASM/model assets live. Use a fixed, version-matched public asset root.
+      const assetRoot="https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/dist/";
+      const output=await removeBackground(input,{publicPath:assetRoot,progress:(key,current,total)=>{
         if(total>0){const pct=Math.min(100,Math.round(current/total*100));message(`③ モデル取得中：${String(key).slice(0,45)} ${pct}%`);}
       }});
       message("④ 輪郭を合成しています…");
@@ -155,7 +158,7 @@
       message("AI切り抜きが完了しました。輪郭を確認し、必要に応じて消しゴム・復元ブラシで修正してください。");
     }catch(err){
       console.error("AI cutout error",err);
-      const detail=String(err?.message || err || "原因不明").slice(0,260);
+      const detail=String(err?.stack || err?.message || err || "原因不明").slice(0,500);
       message(`AI切り抜き失敗：${detail}。この表示を教えてください。手動編集は引き続き利用できます。`);
     }finally{state.aiBusy=false;$("cutout-ai-select").disabled=false;$("cutout-ai-run").disabled=!state.selection;}
   });
