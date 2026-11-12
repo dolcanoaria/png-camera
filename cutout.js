@@ -124,20 +124,24 @@
     const w=right-x,h=bottom-y;
     if(w<16 || h<16)return;
     state.aiBusy=true;$("cutout-ai-run").disabled=true;$("cutout-ai-select").disabled=true;
-    message("AIを準備しています。初回はモデルのダウンロードで時間がかかります。画面を閉じずにお待ちください。");
+    message("① AIライブラリを読み込み中です（ネット接続が必要）…");
     try {
       // IMG.LY's open-source, in-browser background-removal library. No external image upload.
       // Loaded only when the user explicitly requests AI; it is not part of the offline shell.
       const module=await import("https://esm.sh/@imgly/background-removal@1.7.0?bundle");
+      message("② AIライブラリの読み込み完了。画像を準備しています…");
       const removeBackground=module.removeBackground || module.default;
       if(typeof removeBackground!=="function")throw new Error("AIライブラリを読み込めませんでした");
-      const crop=document.createElement("canvas");crop.width=w;crop.height=h;
-      crop.getContext("2d").drawImage(source,x,y,w,h,0,0,w,h);
+      const crop=document.createElement("canvas");
+      const scale=Math.min(1,640/Math.max(w,h));
+      crop.width=Math.max(1,Math.round(w*scale));crop.height=Math.max(1,Math.round(h*scale));
+      crop.getContext("2d").drawImage(source,x,y,w,h,0,0,crop.width,crop.height);
       const input=await new Promise((resolve,reject)=>crop.toBlob(blob=>blob?resolve(blob):reject(new Error("画像変換失敗")),"image/png"));
-      message("AIが背景を解析しています。端末の性能によっては数分かかることがあります。");
+      message("③ AIモデルを取得・初期化しています。初回は時間がかかります…");
       const output=await removeBackground(input,{progress:(key,current,total)=>{
-        if(total>0 && current===total)message("AIモデルを読み込みました。背景を解析しています…");
+        if(total>0){const pct=Math.min(100,Math.round(current/total*100));message(`③ モデル取得中：${String(key).slice(0,45)} ${pct}%`);}
       }});
+      message("④ 輪郭を合成しています…");
       const bitmap=await createImageBitmap(output);
       snapshot();mctx.clearRect(0,0,mask.width,mask.height);
       // Preserve the model's alpha channel as the editable mask.
@@ -151,7 +155,8 @@
       message("AI切り抜きが完了しました。輪郭を確認し、必要に応じて消しゴム・復元ブラシで修正してください。");
     }catch(err){
       console.error("AI cutout error",err);
-      message("AI切り抜きを実行できませんでした。ブラウザのメモリ不足・モデル取得失敗・非対応環境などが考えられます。従来の手動編集は利用できます。");
+      const detail=String(err?.message || err || "原因不明").slice(0,260);
+      message(`AI切り抜き失敗：${detail}。この表示を教えてください。手動編集は引き続き利用できます。`);
     }finally{state.aiBusy=false;$("cutout-ai-select").disabled=false;$("cutout-ai-run").disabled=!state.selection;}
   });
   $("cutout-mode").addEventListener("change",ev=>{state.mode=ev.target.value;});
