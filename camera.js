@@ -136,10 +136,18 @@ byId("file").addEventListener("change", async (event) => {
   const file = event.target.files[0];
   event.target.value = "";
   if (!file) return;
+  await loadOverlay(file);
+});
+
+async function isPng(file) {
+  const header = new Uint8Array(await file.slice(0, 8).arrayBuffer());
+  return header.join(",") === "137,80,78,71,13,10,26,10";
+}
+
+async function loadOverlay(file) {
   const request = ++imageRequest;
   try {
-    const header = new Uint8Array(await file.slice(0, 8).arrayBuffer());
-    if (header.join(",") !== "137,80,78,71,13,10,26,10") throw new Error("PNG");
+    if (!await isPng(file)) throw new Error("PNG");
     const bitmap = await createImageBitmap(file);
     if (request !== imageRequest) {
       bitmap.close();
@@ -150,10 +158,12 @@ byId("file").addEventListener("change", async (event) => {
     resetPose();
     updateControls();
     status("PNGを読み込みました。");
+    return true;
   } catch {
     if (request === imageRequest) status("PNGを読み込めませんでした。別のPNGを選んでください。");
   }
-});
+  return false;
+}
 byId("reset").addEventListener("click", resetPose);
 byId("remove").addEventListener("click", () => {
   imageRequest++;
