@@ -8,7 +8,6 @@
 <title>透過PNGカメラ</title>
 <link rel="stylesheet" href="style.css">
 <script defer src="camera.js"></script>
-<script defer src="library.js"></script>
 </head>
 <body>
 <main>
@@ -20,7 +19,7 @@
 </section>
 <div class="controls">
 <button id="camera">背面カメラを起動</button>
-<label class="picker">透過PNGを選ぶ<input id="file" type="file" accept="image/png,.png"></label>
+<label class="picker">透過PNGを選ぶ<input id="file" type="file" aria-label="フォルダをたどって透過PNGを選ぶ"></label>
 <button id="reset" disabled>配置を戻す</button>
 <button id="remove" disabled>PNGを外す</button>
 <button id="capture" disabled>撮影して保存</button>
@@ -28,24 +27,7 @@
 </div>
 <p class="hint">1本指で移動。2本指で拡大・縮小、回転。</p>
 <p id="status" role="status"></p>
-<section class="library" aria-labelledby="library-title">
-<h2 id="library-title">キャラクター一覧</h2>
-<p class="hint">初回と素材を追加したときに、ダウンロード内の「キャラ」フォルダを選びます。</p>
-<label class="picker">キャラフォルダを読み込む／更新<input id="folder" type="file" webkitdirectory multiple aria-label="キャラフォルダを読み込む／更新"></label>
-<div class="library-selects">
-<label>作品<select id="work" disabled></select></label>
-<label>キャラクター<select id="character" disabled></select></label>
-<button id="use-character" disabled>撮影に使う</button>
-</div>
-<details>
-<summary>フォルダを選べない場合</summary>
-<p class="hint">作品フォルダと同じ名前を入力し、その作品のPNGをまとめて選びます。</p>
-<label for="work-name">作品名</label>
-<input id="work-name" type="text" maxlength="120" placeholder="例：文豪ストレイドッグス">
-<label class="picker">この作品のPNGを選ぶ<input id="work-files" type="file" multiple accept=".png,image/png"></label>
-</details>
-<p id="library-status" role="status"></p>
-</section>
 </main>
 </body>
 </html>
+
