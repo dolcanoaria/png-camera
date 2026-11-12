@@ -17,3 +17,12 @@ button, .picker, #download { min-height: 44px; padding: 9px 12px; border-radius:
 button:disabled { opacity: .45; cursor: default; }
 #status { min-height: 1.5em; font-size: .9rem; }
 [hidden] { display: none !important; }
+.library { border-top: 1px solid #46574d; padding-top: 14px; }
+.library h2 { margin: 0; font-size: 1.15rem; }
+.library-selects { display: grid; gap: 8px; margin: 12px 0; }
+.library select, .library input[type="text"] {
+  display: block; width: 100%; min-height: 44px; margin-top: 4px; padding: 8px;
+  border: 1px solid #52665a; border-radius: 9px; background: #27362f; color: inherit; font: inherit;
+}
+.library details .picker { margin-top: 8px; }
+#library-status { font-size: .9rem; min-height: 1.5em; }
