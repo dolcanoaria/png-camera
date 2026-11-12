@@ -26,3 +26,8 @@ button:disabled { opacity: .45; cursor: default; }
 }
 .library details .picker { margin-top: 8px; }
 #library-status { font-size: .9rem; min-height: 1.5em; }
+.layer-picker { display: flex; flex-direction: column; gap: 3px; min-width: 145px; font-size: .82rem; color: #bac6be; }
+.layer-picker select { min-height: 44px; padding: 8px; border-radius: 9px; border: 1px solid #52665a; background: #27362f; color: #f5f2e9; font: inherit; }
+.library details { padding: 10px 0; }
+.library summary { cursor: pointer; padding: 10px 0; }
+.library details > label:not(.picker) { display: block; margin: 12px 0; }
