@@ -1,0 +1,19 @@
+* { box-sizing: border-box; }
+:root { color-scheme: dark; font-family: system-ui, sans-serif; background: #121715; color: #f5f2e9; }
+body { margin: 0; }
+main { width: min(100%, 760px); margin: auto; padding: 18px 16px max(24px, env(safe-area-inset-bottom)); }
+h1 { margin: 0; font-size: 1.45rem; letter-spacing: .06em; }
+header p, .hint { color: #bac6be; font-size: .85rem; }
+header p { margin: 5px 0 14px; }
+.view { position: relative; display: grid; place-items: center; background: #202925; border: 1px solid #46574d; border-radius: 14px; overflow: hidden; }
+canvas { display: block; width: auto; height: auto; max-width: 100%; max-height: min(57svh, 620px); touch-action: none; }
+#empty { position: absolute; text-align: center; padding: 1em; pointer-events: none; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+button, .picker, #download { min-height: 44px; padding: 9px 12px; border-radius: 9px; border: 1px solid #52665a; background: #27362f; color: inherit; font: inherit; font-size: .9rem; cursor: pointer; }
+.picker { position: relative; display: inline-grid; place-items: center; overflow: hidden; }
+.picker input { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
+.picker:focus-within, :focus-visible { outline: 2px solid #eacb8d; outline-offset: 2px; }
+#capture { width: 100%; background: #eacb8d; color: #241d13; font-weight: 700; }
+button:disabled { opacity: .45; cursor: default; }
+#status { min-height: 1.5em; font-size: .9rem; }
+[hidden] { display: none !important; }
