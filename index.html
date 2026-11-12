@@ -4,11 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src blob:; media-src blob:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob:; media-src blob:; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'">
 <title>透過PNGカメラ</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#121715">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="icon" href="icons/icon-192.png" sizes="192x192">
 <link rel="stylesheet" href="style.css">
 <script defer src="camera.js"></script>
 <script defer src="library.js"></script>
+<script defer src="pwa.js"></script>
 </head>
 <body>
 <main>
@@ -35,6 +40,7 @@
 </div>
 <p class="hint">キャラをタップして選択。1本指で移動、2本指で拡大・縮小・回転。最大3人まで追加できます。選択枠は保存画像に入りません。</p>
 <p id="status" role="status"></p>
+<p id="offline-status" class="hint" role="status">オフライン利用の準備を確認しています…</p>
 <section class="library" aria-label="作品別キャラクターライブラリ">
 <h2>作品別キャラクターライブラリ</h2>
 <p class="hint">端末内に保存したPNGを選んで追加できます。既存のライブラリは引き継がれます。</p>
