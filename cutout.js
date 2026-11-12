@@ -159,31 +159,66 @@
         const t=Math.max(0,Math.min(1,(a-0.12)/0.68));
         alpha[p]=Math.round(255*t*t*(3-2*t));
       }
-      // Remove near-white backing connected to the crop border, but never
-      // remove enclosed white highlights or disconnected light clothing.
+      // Remove unwanted cardboard borders and dark cast shadows touching the
+      // AI silhouette boundary. Do not change the source RGB or enclosed details.
+      // Unlike a flood fill from the crop rectangle, seeds are taken from the
+      // *AI mask perimeter*, so backing fully inside the crop can be reached.
       const srcPixels=sctx.getImageData(x,y,w,h).data;
-      const visited=new Uint8Array(rw*rh);
-      const queue=new Int32Array(rw*rh);
-      let head=0,tail=0;
-      const isBacking=(p)=>{
+      const n=rw*rh;
+      const originalAlpha=alpha.slice();
+      const candidate=new Uint8Array(n);
+      const visited=new Uint8Array(n);
+      const queue=new Int32Array(n);
+      const isCandidate=(p)=>{
         const k=p*4,r=srcPixels[k],g=srcPixels[k+1],b=srcPixels[k+2];
         const hi=Math.max(r,g,b),lo=Math.min(r,g,b);
-        return lo>=196 && hi-lo<=39;
+        // Near-white/very light neutral cardboard; near-black neutral shadow.
+        // Do not classify colored clothes or medium-gray hair as backing.
+        if(lo>=173 && hi-lo<=44)return 1;
+        if(hi<=91 && hi-lo<=34)return 2;
+        return 0;
       };
-      const enqueue=(p)=>{
-        if(visited[p])return;
-        visited[p]=1;
-        if(isBacking(p))queue[tail++]=p;
-      };
-      for(let xx=0;xx<rw;xx++){enqueue(xx);enqueue((rh-1)*rw+xx);}
-      for(let yy=0;yy<rh;yy++){enqueue(yy*rw);enqueue(yy*rw+rw-1);}
-      while(head<tail){
-        const p=queue[head++];alpha[p]=0;
+      for(let p=0;p<n;p++)candidate[p]=isCandidate(p);
+      const neighbors=(p,fn)=>{
         const xx=p%rw;
-        if(xx>0)enqueue(p-1);
-        if(xx+1<rw)enqueue(p+1);
-        if(p>=rw)enqueue(p-rw);
-        if(p+rw<rw*rh)enqueue(p+rw);
+        if(xx>0)fn(p-1);
+        if(xx+1<rw)fn(p+1);
+        if(p>=rw)fn(p-rw);
+        if(p+rw<n)fn(p+rw);
+      };
+      let removed=0;
+      for(let p=0;p<n;p++){
+        if(!candidate[p] || visited[p] || originalAlpha[p]<12)continue;
+        // A connected component must touch the outer boundary of the AI matte.
+        // Interior highlights (even if light-colored) must remain untouched.
+        let head=0,tail=0,touchesBoundary=false;
+        queue[tail++]=p;visited[p]=1;
+        while(head<tail){
+          const q=queue[head++];
+          const xx=q%rw,yy=Math.floor(q/rw);
+          if(xx===0||yy===0||xx===rw-1||yy===rh-1)touchesBoundary=true;
+          neighbors(q,(v)=>{
+            if(originalAlpha[v]<12)touchesBoundary=true;
+            if(!visited[v] && candidate[v]===candidate[p] && originalAlpha[v]>=12){
+              visited[v]=1;queue[tail++]=v;
+            }
+          });
+        }
+        // Tiny components are often eye highlights or image noise.
+        if(touchesBoundary && tail>=Math.max(24,Math.floor(n*0.00003))){
+          for(let i=0;i<tail;i++){alpha[queue[i]]=0;removed++;}
+        }
+      }
+      // A subtle one-pixel feather on the newly cut backing/foreground edge.
+      // Do not blur the entire AI matte or recolor any source pixels.
+      if(removed){
+        const cleaned=alpha.slice();
+        for(let p=0;p<n;p++){
+          if(!cleaned[p] || !originalAlpha[p])continue;
+          let edge=false;
+          neighbors(p,(q)=>{if(!cleaned[q] && originalAlpha[q]>=12)edge=true;});
+          if(edge)alpha[p]=Math.min(alpha[p],190);
+        }
       }
       // Keep the editable mask white; only its alpha channel controls cutout.
       for(let p=0;p<alpha.length;p++){
@@ -194,7 +229,7 @@
       rctx.putImageData(rgba,0,0);
       mctx.drawImage(result,x,y);
       state.selection=null;render();
-      message("AI切り抜きが完了しました（内部の不透明度補正・外周の白背景除去を適用）。輪郭を確認し、必要に応じてブラシで修正してください。");
+      message("AI切り抜きが完了しました（内部の不透明度補正・白いパネル縁と暗い影の除去を適用）。輪郭を確認し、必要に応じてブラシで修正してください。");
     }catch(err){
       console.error("AI cutout error",err);
       const detail=String(err?.stack || err?.message || err || "原因不明").slice(0,500);
