@@ -140,8 +140,8 @@
       message("③ AIモデルとWASMを指定CDNから取得・初期化しています…");
       // The ESM CDN bundle cannot reliably infer where its separately fetched
       // WASM/model assets live. Use a fixed, version-matched public asset root.
-      const assetRoot="https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/dist/";
-      const output=await removeBackground(input,{publicPath:assetRoot,progress:(key,current,total)=>{
+      const assetRoot="https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/";
+      const output=await removeBackground(input,{publicPath:assetRoot,model:"isnet_quint8",device:"cpu",progress:(key,current,total)=>{
         if(total>0){const pct=Math.min(100,Math.round(current/total*100));message(`③ モデル取得中：${String(key).slice(0,45)} ${pct}%`);}
       }});
       message("④ 輪郭を合成しています…");
