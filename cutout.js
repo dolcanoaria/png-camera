@@ -5,7 +5,7 @@
   const zoomControls=document.createElement("div");
   zoomControls.style.cssText="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0";
   const viewport=document.createElement("div");
-  viewport.style.cssText="overflow:auto;max-height:65vh;overscroll-behavior:contain";
+  viewport.style.cssText="display:block;width:100%;min-width:0;overflow:auto;max-height:65vh;overscroll-behavior:contain";
   canvas.before(zoomControls,viewport);
   viewport.append(canvas);
   let zoom=1;
@@ -48,14 +48,23 @@
     const x=(viewport.scrollLeft+viewport.clientWidth/2)*ratio-viewport.clientWidth/2;
     const y=(viewport.scrollTop+viewport.clientHeight/2)*ratio-viewport.clientHeight/2;
     zoom=next;
-    canvas.style.width=(zoom*100)+"%";
-    canvas.style.maxWidth="none";
-    canvas.style.height="auto";
+    sizeZoomCanvas();
     viewport.scrollLeft=x;viewport.scrollTop=y;
     zoomReset.textContent=(zoom*100)+"%";
     zoomOut.disabled=zoom===1;
     zoomIn.disabled=zoom===4;
   }
+  function sizeZoomCanvas(){
+    const width=Math.round(viewport.clientWidth*zoom);
+    if(!width || !canvas.width)return;
+    canvas.style.setProperty("width",width+"px","important");
+    canvas.style.setProperty("height",Math.round(width*canvas.height/canvas.width)+"px","important");
+    canvas.style.setProperty("max-width","none","important");
+    canvas.style.setProperty("max-height","none","important");
+    canvas.style.setProperty("display","block","important");
+  }
+  const zoomObserver=new ResizeObserver(sizeZoomCanvas);
+  zoomObserver.observe(viewport);
   setZoom(1);
 
   const source = document.createElement("canvas"), sctx = source.getContext("2d", {willReadFrequently:true});
@@ -63,7 +72,7 @@
   const state = { loaded:false, mode:"erase", down:false, last:null, undo:[], sourceName:"character", selecting:false, selection:null, anchor:null, aiBusy:false, lasso:false, lassoPoints:[] };
   const message = (s) => { $("cutout-status").textContent=s; };
   const limit = 1600;
-  const setSize = (w,h) => { for (const c of [canvas,source,mask]) { c.width=w;c.height=h; } };
+  const setSize = (w,h) => { for (const c of [canvas,source,mask]) { c.width=w;c.height=h; } setZoom(1); };
   function render() {
     if (!state.loaded) return;
     ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -404,6 +413,7 @@
     } catch {message("登録できませんでした。Chromeのサイトデータと空き容量を確認してください。");}
   });
 })();
+
 
 
 
