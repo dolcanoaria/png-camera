@@ -105,25 +105,95 @@
     const points=state.lassoPoints;
     state.down=false;state.lasso=false;
     if(points.length<3){state.lassoPoints=[];render();message("囲みが短すぎます。もう一度、大きく囲んでください。");return;}
-    // Erase only pixels inside the closed freehand polygon, leaving all other pixels intact.
-    snapshot();
-    mctx.save();mctx.globalCompositeOperation="destination-out";
-    mctx.fillStyle="rgba(0,0,0,1)";
-    mctx.beginPath();mctx.moveTo(points[0].x,points[0].y);
-    for(let i=1;i<points.length;i++)mctx.lineTo(points[i].x,points[i].y);
-    mctx.closePath();mctx.fill();mctx.restore();
+    const w=canvas.width,h=canvas.height;
+    const region=document.createElement("canvas");
+    region.width=w;region.height=h;
+    const rctx=region.getContext("2d");
+    rctx.beginPath();rctx.moveTo(points[0].x,points[0].y);
+    for(const p of points.slice(1))rctx.lineTo(p.x,p.y);
+    rctx.closePath();rctx.fill();
+    const inside=rctx.getImageData(0,0,w,h).data;
+    const src=sctx.getImageData(0,0,w,h).data;
+    const edited=mctx.getImageData(0,0,w,h);
+    const alpha=edited.data;
+    const tolerance=Math.min(18,Math.max(0,Number($("cutout-tolerance").value)));
+    const edge=Math.min(9,tolerance);
+    const distance=(i,j)=>Math.max(
+      Math.abs(src[i]-src[j]),Math.abs(src[i+1]-src[j+1]),Math.abs(src[i+2]-src[j+2])
+    );
+    const opaque=(i)=>src[i+3]>=250 && alpha[i+3]>=250;
+    const neighbors=(i,visit)=>{
+      if(i%w>0)visit(i-1);
+      if(i%w<w-1)visit(i+1);
+      if(i>=w)visit(i-w);
+      if(i<w*(h-1))visit(i+w);
+    };
+    const samples=[];
+    let perimeter=0;
+    for(let i=0;i<w*h;i++){
+      const k=i*4;
+      if(inside[k+3]!==255)continue;
+      let boundary=false,continues=false;
+      neighbors(i,(j)=>{
+        const n=j*4;
+        if(inside[n+3]===255)return;
+        boundary=true;
+        if(opaque(k) && opaque(n) && distance(k,n)<=edge)continues=true;
+      });
+      if(boundary)perimeter++;
+      if(continues)samples.push(i);
+    }
+    // Require one dominant boundary color before changing the mask.
+    const bins=new Map();
+    for(const i of samples){
+      const k=i*4;
+      const key=(src[k]>>4)*256+(src[k+1]>>4)*16+(src[k+2]>>4);
+      const bin=bins.get(key);
+      if(bin)bin.count++;
+      else bins.set(key,{index:k,count:1});
+    }
+    const ranked=[...bins.values()].sort((a,b)=>b.count-a.count);
+    const background=ranked[0]?.index;
+    const queue=new Int32Array(w*h);
+    const seen=new Uint8Array(w*h);
+    let head=0,tail=0;
+    if(background!==undefined){
+      for(const i of samples){
+        if(distance(i*4,background)>tolerance)continue;
+        seen[i]=1;queue[tail++]=i;
+      }
+    }
+    if(tail>=Math.max(8,Math.ceil(perimeter*0.65))){
+      while(head<tail){
+        const i=queue[head++],k=i*4;
+        alpha[k+3]=0;
+        neighbors(i,(j)=>{
+          const n=j*4;
+          if(seen[j] || inside[n+3]!==255 || !opaque(n))return;
+          if(distance(k,n)>edge || distance(n,background)>tolerance)return;
+          seen[j]=1;queue[tail++]=j;
+        });
+      }
+      snapshot();
+      mctx.putImageData(edited,0,0);
+      message("背景と判定した部分を透明にしました。必要に応じて「元に戻す」を押してください。");
+    }else{
+      message("背景の色を特定できませんでした。囲みの縁がなるべく背景を通るように囲み直してください。");
+    }
     state.lassoPoints=[];render();
-    message("囲んだ部分を透明にしました。間違えた場合は『元に戻す』を押してください。");
   }
   const stop=()=>{
-    if(state.lasso){eraseLasso();return;}
+    if(state.lasso && state.down){eraseLasso();return;}
     if(state.selecting && state.anchor){state.anchor=null;state.selecting=false;
       $("cutout-ai-run").disabled=!(state.selection && state.selection.w>10 && state.selection.h>10);
       message("囲む範囲を指定しました。『AIで切り抜く』を押してください。");render();
     }
     state.down=false;state.last=null;
   };
-  canvas.addEventListener("pointerup",stop);canvas.addEventListener("pointercancel",stop);
+  canvas.addEventListener("pointerup",stop);canvas.addEventListener("pointercancel",()=>{
+    if(state.lasso){state.down=false;state.lassoPoints=[];render();return;}
+    stop();
+  });
   $("cutout-file").addEventListener("change",async(ev)=>{
     const file=ev.target.files[0];ev.target.value="";if(!file)return;
     try {
@@ -234,7 +304,7 @@
   const lassoButton=document.createElement("button");
   lassoButton.type="button";lassoButton.id="cutout-lasso";
   lassoButton.textContent="囲んで透明化";
-  lassoButton.title="不要な部分を指で囲んで離すと、内側をまとめて透明にします";
+  lassoButton.title="囲みの縁に続く背景色を検出して透明にします";
   lassoButton.disabled=true;
   $("cutout-ai-select").insertAdjacentElement("afterend",lassoButton);
   $("cutout-file").addEventListener("change",()=>{lassoButton.disabled=false;});
@@ -243,7 +313,7 @@
     state.selecting=false;state.anchor=null;state.selection=null;
     $("cutout-ai-run").disabled=true;
     state.lasso=true;state.down=false;state.lassoPoints=[];
-    message("消したい部分を指で一筆書きで囲み、指を離してください。囲んだ内側だけ透明になります。");render();
+    message("囲みの縁が背景を通るように指で囲んでください。囲みの中で背景と判定した部分を透明にします。");render();
   });
   $("cutout-mode").addEventListener("change",ev=>{state.mode=ev.target.value;});
   $("cutout-undo").addEventListener("click",()=>{
@@ -272,3 +342,4 @@
     } catch {message("登録できませんでした。Chromeのサイトデータと空き容量を確認してください。");}
   });
 })();
+
