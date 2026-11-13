@@ -5,7 +5,7 @@
   const zoomControls=document.createElement("div");
   zoomControls.style.cssText="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0";
   const viewport=document.createElement("div");
-  viewport.style.cssText="overflow:auto;max-height:65vh";
+  viewport.style.cssText="overflow:auto;max-height:65vh;overscroll-behavior:contain";
   canvas.before(zoomControls,viewport);
   viewport.append(canvas);
   let zoom=1;
@@ -22,9 +22,24 @@
   const zoomIn=zoomButton("拡大",()=>setZoom(zoom+0.5));
   const panButton=zoomButton("表示位置を移動",()=>{
     panning=!panning;
-    canvas.style.touchAction=panning?"auto":"none";
+    canvas.style.touchAction="none";
     panButton.setAttribute("aria-pressed",String(panning));
     panButton.textContent=panning?"編集に戻る":"表示位置を移動";
+  });
+  canvas.style.touchAction="none";
+  let drag=null;
+  canvas.addEventListener("pointerdown",ev=>{
+    if(!panning || !ev.isPrimary || ev.button!==0)return;
+    canvas.setPointerCapture(ev.pointerId);
+    drag={id:ev.pointerId,x:ev.clientX,y:ev.clientY,left:viewport.scrollLeft,top:viewport.scrollTop};
+  });
+  canvas.addEventListener("pointermove",ev=>{
+    if(!panning || drag?.id!==ev.pointerId)return;
+    viewport.scrollLeft=drag.left+drag.x-ev.clientX;
+    viewport.scrollTop=drag.top+drag.y-ev.clientY;
+  });
+  canvas.addEventListener("lostpointercapture",ev=>{
+    if(drag?.id===ev.pointerId)drag=null;
   });
   panButton.setAttribute("aria-pressed","false");
   function setZoom(value){
@@ -130,6 +145,7 @@
     state.down=true;state.last=p;brush(p,p);
   });
   canvas.addEventListener("pointermove",ev=>{
+    if(panning)return;
     if(state.lasso && state.down){
       ev.preventDefault();const p=position(ev),last=state.lassoPoints[state.lassoPoints.length-1];
       if(Math.hypot(p.x-last.x,p.y-last.y)>Math.max(2,canvas.width/400)){state.lassoPoints.push(p);render();}
@@ -388,6 +404,7 @@
     } catch {message("登録できませんでした。Chromeのサイトデータと空き容量を確認してください。");}
   });
 })();
+
 
 
 
