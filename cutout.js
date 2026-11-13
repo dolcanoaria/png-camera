@@ -5,7 +5,7 @@
   const zoomControls=document.createElement("div");
   zoomControls.style.cssText="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0";
   const viewport=document.createElement("div");
-  viewport.style.cssText="display:block;width:100%;min-width:0;overflow:auto;max-height:65vh;overscroll-behavior:contain";
+  viewport.style.cssText="display:block;width:100%;min-width:0;position:relative;overflow:hidden;height:65vh;overscroll-behavior:contain";
   canvas.before(zoomControls,viewport);
   viewport.append(canvas);
   let zoom=1;
@@ -27,16 +27,21 @@
     panButton.textContent=panning?"編集に戻る":"表示位置を移動";
   });
   canvas.style.touchAction="none";
+  let offsetX=0,offsetY=0,displayWidth=0,displayHeight=0;
+  function moveImage(x,y){
+    offsetX=Math.max(0,Math.min(x,displayWidth-viewport.clientWidth));
+    offsetY=Math.max(0,Math.min(y,displayHeight-viewport.clientHeight));
+    canvas.style.transform="translate("+(-offsetX)+"px,"+(-offsetY)+"px)";
+  }
   let drag=null;
   canvas.addEventListener("pointerdown",ev=>{
     if(!panning || !ev.isPrimary || ev.button!==0)return;
     canvas.setPointerCapture(ev.pointerId);
-    drag={id:ev.pointerId,x:ev.clientX,y:ev.clientY,left:viewport.scrollLeft,top:viewport.scrollTop};
+    drag={id:ev.pointerId,x:ev.clientX,y:ev.clientY,left:offsetX,top:offsetY};
   });
   canvas.addEventListener("pointermove",ev=>{
     if(!panning || drag?.id!==ev.pointerId)return;
-    viewport.scrollLeft=drag.left+drag.x-ev.clientX;
-    viewport.scrollTop=drag.top+drag.y-ev.clientY;
+    moveImage(drag.left+drag.x-ev.clientX,drag.top+drag.y-ev.clientY);
   });
   canvas.addEventListener("lostpointercapture",ev=>{
     if(drag?.id===ev.pointerId)drag=null;
@@ -45,11 +50,11 @@
   function setZoom(value){
     const next=Math.max(1,Math.min(4,value));
     const ratio=next/zoom;
-    const x=(viewport.scrollLeft+viewport.clientWidth/2)*ratio-viewport.clientWidth/2;
-    const y=(viewport.scrollTop+viewport.clientHeight/2)*ratio-viewport.clientHeight/2;
+    const x=(offsetX+viewport.clientWidth/2)*ratio-viewport.clientWidth/2;
+    const y=(offsetY+viewport.clientHeight/2)*ratio-viewport.clientHeight/2;
     zoom=next;
     sizeZoomCanvas();
-    viewport.scrollLeft=x;viewport.scrollTop=y;
+    moveImage(x,y);
     zoomReset.textContent=(zoom*100)+"%";
     zoomOut.disabled=zoom===1;
     zoomIn.disabled=zoom===4;
@@ -57,11 +62,16 @@
   function sizeZoomCanvas(){
     const width=Math.round(viewport.clientWidth*zoom);
     if(!width || !canvas.width)return;
+    displayWidth=width;
+    displayHeight=Math.round(width*canvas.height/canvas.width);
+    canvas.style.setProperty("position","absolute","important");
+    canvas.style.inset="0 auto auto 0";
     canvas.style.setProperty("width",width+"px","important");
-    canvas.style.setProperty("height",Math.round(width*canvas.height/canvas.width)+"px","important");
+    canvas.style.setProperty("height",displayHeight+"px","important");
     canvas.style.setProperty("max-width","none","important");
     canvas.style.setProperty("max-height","none","important");
     canvas.style.setProperty("display","block","important");
+    moveImage(offsetX,offsetY);
   }
   const zoomObserver=new ResizeObserver(sizeZoomCanvas);
   zoomObserver.observe(viewport);
@@ -413,6 +423,7 @@
     } catch {message("登録できませんでした。Chromeのサイトデータと空き容量を確認してください。");}
   });
 })();
+
 
 
 
