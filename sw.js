@@ -1,13 +1,13 @@
 "use strict";
 // Version bump required whenever application shell changes.
-const CACHE = "png-camera-shell-v1.4.8";
+const CACHE = "png-camera-shell-v1.4.9";
 const SHELL = ["./", "./index.html", "./style.css", "./camera.js", "./library.js", "./pwa.js", "./cutout.js", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png"];
 const shellPaths = new Set(SHELL.map((path) => new URL(path, self.registration.scope).pathname));
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
     // Fail installation if any required file is unavailable; do not install a partial offline app.
-    await cache.addAll(SHELL);
+    await cache.addAll(SHELL.map((path) => new Request(new URL(path, self.registration.scope), { cache: "reload" })));
     await self.skipWaiting();
   })());
 });
@@ -37,10 +37,11 @@ self.addEventListener("fetch", (event) => {
   if (req.mode === "navigate" || shellPaths.has(url.pathname)) {
     event.respondWith((async () => {
       try {
-        const response = await fetch(req);
+        const response = await fetch(req, { cache: "no-store" });
         if (response.ok) {
           const cache = await caches.open(CACHE);
-          await cache.put(req, response.clone());
+          // A cache write failure must not discard a fresh response.
+          await cache.put(req, response.clone()).catch(() => {});
         }
         return response;
       } catch (error) {
@@ -56,3 +57,4 @@ self.addEventListener("fetch", (event) => {
     })());
   }
 });
+
