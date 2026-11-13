@@ -81,6 +81,7 @@
     if(!state.loaded)return;
     ev.preventDefault();canvas.setPointerCapture(ev.pointerId);
     const p=position(ev);
+    if(state.lasso && state.lassoPoints.length>=3){eraseLasso(p);return;}
     if(state.lasso) {state.down=true;state.lassoPoints=[p];render();return;}
     if(state.selecting) {state.anchor=p;state.selection={x:p.x,y:p.y,w:0,h:0};render();return;}
     snapshot();
@@ -101,7 +102,7 @@
     if(!state.down)return;
     ev.preventDefault();const p=position(ev);brush(state.last,p);state.last=p;
   });
-  function eraseLasso() {
+  function eraseLasso(seed) {
     const points=state.lassoPoints;
     state.down=false;state.lasso=false;
     if(points.length<3){state.lassoPoints=[];render();message("囲みが短すぎます。もう一度、大きく囲んでください。");return;}
@@ -153,17 +154,22 @@
       else bins.set(key,{index:k,count:1});
     }
     const ranked=[...bins.values()].sort((a,b)=>b.count-a.count);
-    const background=ranked[0]?.index;
+    const background=seed ? (Math.floor(seed.y)*w+Math.floor(seed.x))*4 : ranked[0]?.index;
     const queue=new Int32Array(w*h);
     const seen=new Uint8Array(w*h);
     let head=0,tail=0;
-    if(background!==undefined){
+    if(seed){
+      if(inside[background+3]===255 && opaque(background)){
+        const i=background/4;
+        seen[i]=1;queue[tail++]=i;
+      }
+    }else if(background!==undefined){
       for(const i of samples){
         if(distance(i*4,background)>tolerance)continue;
         seen[i]=1;queue[tail++]=i;
       }
     }
-    if(tail>=Math.max(8,Math.ceil(perimeter*0.65))){
+    if(tail>=(seed ? 1 : Math.max(8,Math.ceil(perimeter*0.65)))){
       while(head<tail){
         const i=queue[head++],k=i*4;
         alpha[k+3]=0;
@@ -178,7 +184,9 @@
       mctx.putImageData(edited,0,0);
       message("背景と判定した部分を透明にしました。必要に応じて「元に戻す」を押してください。");
     }else{
-      message("背景の色を特定できませんでした。囲みの縁がなるべく背景を通るように囲み直してください。");
+      state.lasso=true;
+      message("囲みの内側に残った背景色をタップしてください。髪や服は避けてください。");
+      render();return;
     }
     state.lassoPoints=[];render();
   }
@@ -342,4 +350,5 @@
     } catch {message("登録できませんでした。Chromeのサイトデータと空き容量を確認してください。");}
   });
 })();
+
 
