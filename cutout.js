@@ -2,6 +2,47 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   const canvas = $("cutout-canvas"), ctx = canvas.getContext("2d", {willReadFrequently:true});
+  const zoomControls=document.createElement("div");
+  zoomControls.style.cssText="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0";
+  const viewport=document.createElement("div");
+  viewport.style.cssText="overflow:auto;max-height:65vh";
+  canvas.before(zoomControls,viewport);
+  viewport.append(canvas);
+  let zoom=1;
+  let panning=false;
+  function zoomButton(label,action){
+    const button=document.createElement("button");
+    button.type="button";button.textContent=label;
+    button.addEventListener("click",action);
+    zoomControls.append(button);
+    return button;
+  }
+  const zoomOut=zoomButton("縮小",()=>setZoom(zoom-0.5));
+  const zoomReset=zoomButton("100%",()=>setZoom(1));
+  const zoomIn=zoomButton("拡大",()=>setZoom(zoom+0.5));
+  const panButton=zoomButton("表示位置を移動",()=>{
+    panning=!panning;
+    canvas.style.touchAction=panning?"auto":"none";
+    panButton.setAttribute("aria-pressed",String(panning));
+    panButton.textContent=panning?"編集に戻る":"表示位置を移動";
+  });
+  panButton.setAttribute("aria-pressed","false");
+  function setZoom(value){
+    const next=Math.max(1,Math.min(4,value));
+    const ratio=next/zoom;
+    const x=(viewport.scrollLeft+viewport.clientWidth/2)*ratio-viewport.clientWidth/2;
+    const y=(viewport.scrollTop+viewport.clientHeight/2)*ratio-viewport.clientHeight/2;
+    zoom=next;
+    canvas.style.width=(zoom*100)+"%";
+    canvas.style.maxWidth="none";
+    canvas.style.height="auto";
+    viewport.scrollLeft=x;viewport.scrollTop=y;
+    zoomReset.textContent=(zoom*100)+"%";
+    zoomOut.disabled=zoom===1;
+    zoomIn.disabled=zoom===4;
+  }
+  setZoom(1);
+
   const source = document.createElement("canvas"), sctx = source.getContext("2d", {willReadFrequently:true});
   const mask = document.createElement("canvas"), mctx = mask.getContext("2d", {willReadFrequently:true});
   const state = { loaded:false, mode:"erase", down:false, last:null, undo:[], sourceName:"character", selecting:false, selection:null, anchor:null, aiBusy:false, lasso:false, lassoPoints:[] };
@@ -78,7 +119,7 @@
     message(`${tail.toLocaleString()}画素のつながった背景を透明化しました。必要に応じてブラシで修正してください。`);
   }
   canvas.addEventListener("pointerdown",ev=>{
-    if(!state.loaded)return;
+    if(!state.loaded || panning)return;
     ev.preventDefault();canvas.setPointerCapture(ev.pointerId);
     const p=position(ev);
     if(state.lasso && state.lassoPoints.length>=3){eraseLasso(p);return;}
@@ -103,6 +144,7 @@
     ev.preventDefault();const p=position(ev);brush(state.last,p);state.last=p;
   });
   function eraseLasso(seed) {
+    const restore=state.lasso==="restore";
     const points=state.lassoPoints;
     state.down=false;state.lasso=false;
     if(points.length<3){state.lassoPoints=[];render();message("囲みが短すぎます。もう一度、大きく囲んでください。");return;}
@@ -114,6 +156,24 @@
     for(const p of points.slice(1))rctx.lineTo(p.x,p.y);
     rctx.closePath();rctx.fill();
     const inside=rctx.getImageData(0,0,w,h).data;
+    if(restore){
+      const edited=mctx.getImageData(0,0,w,h);
+      let changed=false;
+      for(let k=3;k<inside.length;k+=4){
+        const a=inside[k], previous=edited.data[k];
+        if(a<=previous)continue;
+        edited.data[k-3]=255;edited.data[k-2]=255;edited.data[k-1]=255;
+        edited.data[k]=a;
+        changed=true;
+      }
+      if(changed){
+        snapshot();
+        mctx.putImageData(edited,0,0);
+      }
+      state.lassoPoints=[];render();
+      message(changed?"囲みの中を元画像から復元しました。":"囲みの中に復元する部分がありませんでした。");
+      return;
+    }
     const src=sctx.getImageData(0,0,w,h).data;
     const edited=mctx.getImageData(0,0,w,h);
     const alpha=edited.data;
@@ -122,7 +182,7 @@
     const distance=(i,j)=>Math.max(
       Math.abs(src[i]-src[j]),Math.abs(src[i+1]-src[j+1]),Math.abs(src[i+2]-src[j+2])
     );
-    const opaque=(i)=>src[i+3]>=250 && alpha[i+3]>=250;
+    const opaque=(i)=>src[i+3]>=250 && alpha[i+3]>0;
     const neighbors=(i,visit)=>{
       if(i%w>0)visit(i-1);
       if(i%w<w-1)visit(i+1);
@@ -191,6 +251,7 @@
     state.lassoPoints=[];render();
   }
   const stop=()=>{
+    if(panning)return;
     if(state.lasso && state.down){eraseLasso();return;}
     if(state.selecting && state.anchor){state.anchor=null;state.selecting=false;
       $("cutout-ai-run").disabled=!(state.selection && state.selection.w>10 && state.selection.h>10);
@@ -199,6 +260,7 @@
     state.down=false;state.last=null;
   };
   canvas.addEventListener("pointerup",stop);canvas.addEventListener("pointercancel",()=>{
+    if(panning)return;
     if(state.lasso){state.down=false;state.lassoPoints=[];render();return;}
     stop();
   });
@@ -287,6 +349,18 @@
     state.lasso=true;state.down=false;state.lassoPoints=[];
     message("囲みの縁が背景を通るように指で囲んでください。囲みの中で背景と判定した部分を透明にします。");render();
   });
+  const restoreButton=document.createElement("button");
+  restoreButton.type="button";
+  restoreButton.textContent="囲んで復元";
+  lassoButton.after(restoreButton);
+  restoreButton.addEventListener("click",()=>{
+    if(!state.loaded || state.aiBusy)return;
+    state.selection=null;state.selecting=false;state.anchor=null;
+    $("cutout-ai-run").disabled=true;
+    state.lasso="restore";state.down=false;state.lassoPoints=[];
+    message("花や手袋など、戻したい部分を囲んでください。背景を含めると背景も戻ります。");
+    render();
+  });
   $("cutout-mode").addEventListener("change",ev=>{state.mode=ev.target.value;});
   $("cutout-undo").addEventListener("click",()=>{
     const previous=state.undo.pop();if(!previous)return;mctx.putImageData(previous,0,0);render();$("cutout-undo").disabled=!state.undo.length;
@@ -314,6 +388,8 @@
     } catch {message("登録できませんでした。Chromeのサイトデータと空き容量を確認してください。");}
   });
 })();
+
+
 
 
 
