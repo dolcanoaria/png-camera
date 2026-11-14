@@ -40,6 +40,44 @@ cameraZoom.addEventListener("input", () => {
   paint();
 });
 
+let referenceImage;
+let referenceRequest = 0;
+const referenceLabel = document.createElement("label");
+referenceLabel.className = "picker";
+referenceLabel.textContent = "構図合わせ用の画像を選ぶ";
+const referenceFile = document.createElement("input");
+referenceFile.type = "file";
+referenceFile.accept = "image/*";
+referenceLabel.append(referenceFile);
+const referenceToggle = document.createElement("button");
+referenceToggle.type = "button";
+let referenceVisible = false;
+zoomLabel.after(referenceLabel, referenceToggle);
+
+referenceFile.addEventListener("change", async () => {
+  const file = referenceFile.files[0];
+  referenceFile.value = "";
+  if (!file) return;
+  const request = ++referenceRequest;
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    if (request !== referenceRequest) { bitmap.close(); return; }
+    referenceImage?.close();
+    referenceImage = bitmap;
+    referenceVisible = true;
+    updateControls();
+    paint();
+    status(hasCamera() ? "作品画像を50%で重ねています。" : "背面カメラを起動すると、作品画像が重なります。");
+  } catch {
+    if (request === referenceRequest) status("構図合わせ用の画像を読み込めませんでした。");
+  }
+});
+referenceToggle.addEventListener("click", () => {
+  referenceVisible = !referenceVisible;
+  updateControls();
+  paint();
+});
+
 function status(message) { byId("status").textContent = message; }
 function defaultPose() { return { x: .5, y: .55, scale: 1, angle: 0 }; }
 function selectedLayer() { return layers.find((layer) => layer.id === selectedId); }
@@ -52,6 +90,9 @@ function updateLayerSelect() {
 }
 function updateControls() {
   camera.disabled = starting;
+  referenceToggle.disabled = !referenceImage;
+  referenceToggle.textContent = referenceVisible ? "構図合わせをオフ" : "構図合わせをオン";
+  referenceToggle.setAttribute("aria-pressed", String(referenceVisible));
   cameraZoom.disabled = starting || !hasCamera();
   camera.textContent = stream && !starting ? "カメラを停止" : "背面カメラを起動";
   capture.disabled = starting || saving || !hasBackground();
@@ -75,6 +116,15 @@ function draw(target, width, height, showSelection = false) {
     const cropHeight = video.videoHeight / zoom;
     target.drawImage(video, (video.videoWidth - cropWidth) / 2,
       (video.videoHeight - cropHeight) / 2, cropWidth, cropHeight, 0, 0, width, height);
+  }
+  if (showSelection && !background && hasCamera() && referenceVisible && referenceImage) {
+    const scale = Math.max(width / referenceImage.width, height / referenceImage.height);
+    const w = referenceImage.width * scale;
+    const h = referenceImage.height * scale;
+    target.save();
+    target.globalAlpha = .5;
+    target.drawImage(referenceImage, (width - w) / 2, (height - h) / 2, w, h);
+    target.restore();
   }
   for (const layer of layers) {
     const { w, h } = layerSize(layer, width, height);
@@ -307,11 +357,14 @@ capture.addEventListener("click", () => {
     status("合成写真を作成しました。元の写真は変更されません。Chromeのダウンロードで確認できます。");
   }, "image/jpeg", .94);
 });
-window.addEventListener("pagehide", () => {
+window.addEventListener("pagehide", (event) => {
+  if (event.persisted) { stopCamera(); return; }
+  referenceRequest++; referenceImage?.close();
   stopCamera(); background?.close();
   layers.forEach((layer) => layer.bitmap.close());
   if (photoUrl) URL.revokeObjectURL(photoUrl);
 });
 screen.orientation?.addEventListener("change", () => { points.clear(); gestureLayer = null; });
 updateControls(); paint();
+
 
