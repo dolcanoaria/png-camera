@@ -2,7 +2,7 @@
 
 好きな透過PNGをカメラ映像や背景写真に重ね、合成写真をJPEGで保存するWebアプリです。
 
-**現行版 v1.4.20** · [透過PNGカメラを開く](https://dolcanoaria.github.io/png-camera/)
+**現行版 v1.4.21** · [透過PNGカメラを開く](https://dolcanoaria.github.io/png-camera/)
 
 「構図合わせ」は、Pixel 10aのChrome（Web版・インストール版）とiPad miniで動作確認済みです。
 
