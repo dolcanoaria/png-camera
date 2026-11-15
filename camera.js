@@ -8,6 +8,11 @@ const camera = byId("camera");
 const capture = byId("capture");
 const download = byId("download");
 const layerSelect = byId("layer-select");
+const anchorButton = byId("anchor");
+const clearAnchorButton = byId("clear-anchor");
+const shadowButton = byId("shadow");
+const center = { x: .5, y: .5 };
+let anchorLayer;
 const points = new Map();
 const maxEdge = 1920;
 const maxLayers = 3;
@@ -36,6 +41,7 @@ zoomText.textContent = "カメラズーム 1.0×";
 zoomLabel.append(zoomText, cameraZoom);
 camera.parentElement.after(zoomLabel);
 cameraZoom.addEventListener("input", () => {
+  if (!background && hasCamera()) clearPerspective();
   zoomText.textContent = "カメラズーム " + Number(cameraZoom.value).toFixed(1) + "×";
   paint();
 });
@@ -97,7 +103,24 @@ function updateControls() {
   camera.textContent = stream && !starting ? "カメラを停止" : "背面カメラを起動";
   capture.disabled = starting || saving || !hasBackground();
   byId("clear-background").disabled = !background;
-  const selected = !!selectedLayer();
+  const layer = selectedLayer();
+  const selected = !!layer;
+  if (anchorLayer !== layer?.id) anchorLayer = undefined;
+  anchorButton.disabled = !selected;
+  anchorButton.setAttribute("aria-pressed", String(anchorLayer !== undefined));
+  anchorButton.textContent = anchorLayer !== undefined ? "足元の指定をキャンセル" : "足元を指定";
+  clearAnchorButton.disabled = !layer?.anchor;
+  shadowButton.disabled = !layer?.anchor;
+  const shadowEnabled = !!layer?.shadow;
+  shadowButton.textContent = shadowEnabled ? "足元の影をオフ" : "足元の影をオン";
+  shadowButton.setAttribute("aria-pressed", String(shadowEnabled));
+  const perspective = layer?.perspective;
+  byId("perspective-near").disabled = byId("perspective-far").disabled = !layer?.anchor || !hasBackground();
+  byId("clear-perspective").disabled = !perspective;
+  byId("perspective-status").textContent = perspective?.near && perspective?.far
+    ? "サイズ補助が有効です。ピンチで微調整できます。"
+    : perspective?.near ? "手前を登録済み。次は奥を登録してください。"
+    : perspective?.far ? "奥を登録済み。次は手前を登録してください。" : "";
   for (const id of ["reset", "remove", "front", "back"]) byId(id).disabled = !selected;
   byId("empty").hidden = hasBackground();
   updateLayerSelect();
@@ -105,6 +128,18 @@ function updateControls() {
 function layerSize(layer, width, height) {
   const fit = Math.min(width * .55 / layer.bitmap.width, height * .65 / layer.bitmap.height);
   return { w: layer.bitmap.width * fit * layer.pose.scale, h: layer.bitmap.height * fit * layer.pose.scale };
+}
+function drawShadow(target, width, height) {
+  const radius = Math.min(width * .38, height * .21);
+  target.save();
+  target.scale(radius, radius * .28);
+  const gradient = target.createRadialGradient(0, 0, 0, 0, 0, 1);
+  gradient.addColorStop(0, "rgba(0, 0, 0, .42)");
+  gradient.addColorStop(.5, "rgba(0, 0, 0, .22)");
+  gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+  target.fillStyle = gradient;
+  target.fillRect(-1, -1, 2, 2);
+  target.restore();
 }
 function draw(target, width, height, showSelection = false) {
   target.fillStyle = "#202925";
@@ -130,13 +165,23 @@ function draw(target, width, height, showSelection = false) {
     const { w, h } = layerSize(layer, width, height);
     target.save();
     target.translate(layer.pose.x * width, layer.pose.y * height);
+    if (layer.anchor && layer.shadow) drawShadow(target, w, h);
     target.rotate(layer.pose.angle);
-    target.drawImage(layer.bitmap, -w / 2, -h / 2, w, h);
+    const anchor = layer.anchor ?? center;
+    const left = -w * anchor.x;
+    const top = -h * anchor.y;
+    target.drawImage(layer.bitmap, left, top, w, h);
     if (showSelection && layer.id === selectedId) {
       target.strokeStyle = "#f4d18c";
       target.lineWidth = Math.max(2, width / 500);
       target.setLineDash([Math.max(5, width / 100), Math.max(4, width / 140)]);
-      target.strokeRect(-w / 2, -h / 2, w, h);
+      target.strokeRect(left, top, w, h);
+      if (layer.anchor) {
+        target.fillStyle = "#f4d18c";
+        target.beginPath();
+        target.arc(0, 0, Math.max(5, width / 120), 0, 2 * Math.PI);
+        target.fill();
+      }
     }
     target.restore();
   }
@@ -145,8 +190,11 @@ function paint() { draw(context, preview.width, preview.height, true); }
 function loop() { paint(); frame = requestAnimationFrame(loop); }
 function setPreviewDimensions(width, height) {
   const ratio = Math.min(1, maxEdge / Math.max(width, height));
-  preview.width = Math.max(1, Math.round(width * ratio));
-  preview.height = Math.max(1, Math.round(height * ratio));
+  const nextWidth = Math.max(1, Math.round(width * ratio));
+  const nextHeight = Math.max(1, Math.round(height * ratio));
+  if (preview.width !== nextWidth || preview.height !== nextHeight) clearPerspective();
+  preview.width = nextWidth;
+  preview.height = nextHeight;
   points.clear(); gestureLayer = null;
   paint();
 }
@@ -159,6 +207,7 @@ function stopCamera() {
   starting = false;
   const oldStream = stream;
   stream = undefined;
+  clearPerspective();
   oldStream?.getTracks().forEach((track) => track.stop());
   video.srcObject = null;
   cancelAnimationFrame(frame);
@@ -227,6 +276,7 @@ byId("background-file").addEventListener("change", async (event) => {
 });
 byId("clear-background").addEventListener("click", () => {
   backgroundRequest++; background?.close(); background = undefined;
+  clearPerspective();
   points.clear(); gestureLayer = null;
   updateControls(); paint(); status("背景写真を外しました。");
 });
@@ -262,7 +312,9 @@ layerSelect.addEventListener("change", () => {
 });
 byId("reset").addEventListener("click", () => {
   const layer = selectedLayer(); if (!layer) return;
-  layer.pose = defaultPose(); points.clear(); gestureLayer = null; paint();
+  layer.pose = defaultPose();
+  layer.perspective = undefined;
+  points.clear(); gestureLayer = null; updateControls(); paint();
 });
 byId("remove").addEventListener("click", () => {
   const index = layers.findIndex((layer) => layer.id === selectedId);
@@ -286,14 +338,105 @@ function position(event) {
   const rect = preview.getBoundingClientRect();
   return { x: (event.clientX - rect.left) * preview.width / rect.width, y: (event.clientY - rect.top) * preview.height / rect.height };
 }
-function hitTest(layer, point) {
+function imagePoint(layer, point) {
   const { w, h } = layerSize(layer, preview.width, preview.height);
   const dx = point.x - layer.pose.x * preview.width;
   const dy = point.y - layer.pose.y * preview.height;
   const cos = Math.cos(layer.pose.angle), sin = Math.sin(layer.pose.angle);
   const localX = cos * dx + sin * dy;
   const localY = -sin * dx + cos * dy;
-  return Math.abs(localX) <= w / 2 && Math.abs(localY) <= h / 2;
+  const anchor = layer.anchor ?? center;
+  return { x: localX / w + anchor.x, y: localY / h + anchor.y };
+}
+function hitTest(layer, point) {
+  const { x, y } = imagePoint(layer, point);
+  return x >= 0 && x <= 1 && y >= 0 && y <= 1;
+}
+function setAnchor(layer, anchor) {
+  const previous = layer.anchor ?? center;
+  const next = anchor ?? center;
+  const { w, h } = layerSize(layer, preview.width, preview.height);
+  const dx = (next.x - previous.x) * w;
+  const dy = (next.y - previous.y) * h;
+  const cos = Math.cos(layer.pose.angle), sin = Math.sin(layer.pose.angle);
+  layer.pose.x += (cos * dx - sin * dy) / preview.width;
+  layer.pose.y += (sin * dx + cos * dy) / preview.height;
+  layer.anchor = anchor;
+  if (!anchor) layer.shadow = false;
+  layer.perspective = undefined;
+  anchorLayer = undefined;
+  points.clear();
+  gestureLayer = null;
+  updateControls();
+  paint();
+}
+anchorButton.addEventListener("click", () => {
+  const layer = selectedLayer();
+  if (!layer) return;
+  anchorLayer = anchorLayer === layer.id ? undefined : layer.id;
+  points.clear();
+  gestureLayer = null;
+  updateControls();
+  status(anchorLayer === undefined ? "足元の指定をキャンセルしました。" : "プレビューで選択中のキャラの靴底をタップしてください。");
+});
+clearAnchorButton.addEventListener("click", () => {
+  const layer = selectedLayer();
+  if (layer?.anchor) setAnchor(layer, undefined);
+  status("足元の指定を解除しました。");
+});
+shadowButton.addEventListener("click", () => {
+  const layer = selectedLayer();
+  if (!layer?.anchor) return;
+  layer.shadow = !layer.shadow;
+  updateControls();
+  paint();
+});
+function pickAnchor(point) {
+  const layer = selectedLayer();
+  if (!layer || layer.id !== anchorLayer) return false;
+  if (hitTest(layer, point)) {
+    setAnchor(layer, imagePoint(layer, point));
+    status("足元を設定しました。2本指で拡大・縮小しても足元が固定されます。");
+  } else {
+    status("選択枠の内側で靴底をタップしてください。");
+  }
+  return true;
+}
+function clearPerspective() {
+  for (const layer of layers) layer.perspective = undefined;
+  updateControls();
+}
+function perspectiveScale(layer, y) {
+  const { near, far } = layer.perspective ?? {};
+  if (!near || !far) return 1;
+  const t = Math.max(0, Math.min(1, (y - far.y) / (near.y - far.y)));
+  return far.scale + (near.scale - far.scale) * t;
+}
+for (const side of ["near", "far"]) {
+  byId("perspective-" + side).addEventListener("click", () => {
+    const layer = selectedLayer();
+    if (!layer?.anchor || !hasBackground()) return;
+    const sample = { y: layer.pose.y, scale: layer.pose.scale };
+    const calibration = { ...layer.perspective, [side]: sample };
+    const { near, far } = calibration;
+    if (near && far && (near.y - far.y < .03 || near.scale <= far.scale)) {
+      status("手前は奥より画面の下側に置き、大きめにして登録してください。");
+      return;
+    }
+    layer.perspective = calibration;
+    updateControls();
+    status(side === "near" ? "手前の基準を登録しました。" : "奥の基準を登録しました。");
+  });
+}
+byId("clear-perspective").addEventListener("click", () => {
+  const layer = selectedLayer();
+  if (!layer) return;
+  layer.perspective = undefined;
+  updateControls();
+  status("遠近感の設定を解除しました。");
+});
+function clampScale(value) {
+  return Math.min(8, Math.max(.12, value));
 }
 function gesture() {
   const [a, b] = points.values();
@@ -304,6 +447,7 @@ function gesture() {
 preview.addEventListener("pointerdown", (event) => {
   if (!layers.length || event.button !== 0 || points.size >= 2) return;
   const point = position(event);
+  if (pickAnchor(point)) return;
   if (!points.size) {
     const picked = [...layers].reverse().find((layer) => hitTest(layer, point));
     if (!picked) return;
@@ -323,8 +467,22 @@ preview.addEventListener("pointermove", (event) => {
   const after = gesture();
   const pose = layer.pose;
   const pinching = before.distance > 2 && after.distance > 2;
-  const scale = pinching ? Math.min(8, Math.max(.12, pose.scale * after.distance / before.distance)) : pose.scale;
+  const scale = pinching ? clampScale(pose.scale * after.distance / before.distance) : pose.scale;
   const rotation = pinching ? after.angle - before.angle : 0;
+  if (layer.anchor) {
+    if (points.size === 2) {
+      pose.scale = scale;
+      pose.angle += rotation;
+    } else {
+      const y = pose.y + (after.y - before.y) / preview.height;
+      pose.x += (after.x - before.x) / preview.width;
+      const correction = perspectiveScale(layer, y) / perspectiveScale(layer, pose.y);
+      pose.scale = clampScale(pose.scale * correction);
+      pose.y = y;
+    }
+    paint();
+    return;
+  }
   const dx = pose.x * preview.width - before.x;
   const dy = pose.y * preview.height - before.y;
   const factor = scale / pose.scale;
