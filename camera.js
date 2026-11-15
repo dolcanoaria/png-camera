@@ -13,6 +13,10 @@ const clearAnchorButton = byId("clear-anchor");
 const shadowButton = byId("shadow");
 const center = { x: .5, y: .5 };
 let anchorLayer;
+let anchorDraft;
+const anchorEditor = byId("anchor-editor");
+const anchorDetail = byId("anchor-detail");
+const anchorContext = anchorDetail.getContext("2d");
 const points = new Map();
 const maxEdge = 1920;
 const maxLayers = 3;
@@ -377,7 +381,7 @@ anchorButton.addEventListener("click", () => {
   points.clear();
   gestureLayer = null;
   updateControls();
-  status(anchorLayer === undefined ? "足元の指定をキャンセルしました。" : "プレビューで選択中のキャラの靴底をタップしてください。");
+  status(anchorLayer === undefined ? "足元の指定をキャンセルしました。" : "選択中のキャラの靴底付近をタップしてください。拡大して微調整できます。");
 });
 clearAnchorButton.addEventListener("click", () => {
   const layer = selectedLayer();
@@ -391,12 +395,74 @@ shadowButton.addEventListener("click", () => {
   updateControls();
   paint();
 });
+function detailScale(layer) {
+  return anchorDetail.height * 5 / layer.bitmap.height;
+}
+function drawAnchorDetail() {
+  const { layer, x, y } = anchorDraft;
+  const { width, height } = anchorDetail;
+  const scale = detailScale(layer);
+  anchorContext.fillStyle = "#525959";
+  anchorContext.fillRect(0, 0, width, height);
+  anchorContext.drawImage(layer.bitmap, width / 2 - x * scale, height / 2 - y * scale,
+    layer.bitmap.width * scale, layer.bitmap.height * scale);
+  anchorContext.beginPath();
+  anchorContext.moveTo(width / 2 - 9, height / 2);
+  anchorContext.lineTo(width / 2 + 9, height / 2);
+  anchorContext.moveTo(width / 2, height / 2 - 9);
+  anchorContext.lineTo(width / 2, height / 2 + 9);
+  anchorContext.strokeStyle = "#111";
+  anchorContext.lineWidth = 3;
+  anchorContext.stroke();
+  anchorContext.strokeStyle = "#fff";
+  anchorContext.lineWidth = 1;
+  anchorContext.stroke();
+}
+function moveAnchorDraft(dx, dy) {
+  const { layer } = anchorDraft;
+  anchorDraft.x = Math.max(0, Math.min(layer.bitmap.width, anchorDraft.x + dx));
+  anchorDraft.y = Math.max(0, Math.min(layer.bitmap.height, anchorDraft.y + dy));
+  drawAnchorDetail();
+}
+const anchorSteps = { left: [-1, 0], up: [0, -1], down: [0, 1], right: [1, 0] };
+for (const button of anchorEditor.querySelectorAll("[data-anchor-step]")) {
+  button.addEventListener("click", () => {
+    const [x, y] = anchorSteps[button.dataset.anchorStep];
+    const step = 3 / detailScale(anchorDraft.layer);
+    moveAnchorDraft(x * step, y * step);
+  });
+}
+anchorDetail.addEventListener("click", (event) => {
+  const rect = anchorDetail.getBoundingClientRect();
+  const scale = detailScale(anchorDraft.layer);
+  const x = (event.clientX - rect.left) * anchorDetail.width / rect.width - anchorDetail.width / 2;
+  const y = (event.clientY - rect.top) * anchorDetail.height / rect.height - anchorDetail.height / 2;
+  moveAnchorDraft(x / scale, y / scale);
+});
+byId("confirm-anchor").addEventListener("click", () => {
+  const { layer, x, y } = anchorDraft;
+  setAnchor(layer, { x: x / layer.bitmap.width, y: y / layer.bitmap.height });
+  anchorEditor.close("confirmed");
+  status("足元を設定しました。2本指で拡大・縮小しても足元が固定されます。");
+});
+byId("cancel-anchor").addEventListener("click", () => anchorEditor.close());
+anchorEditor.addEventListener("close", () => {
+  anchorDraft = undefined;
+  if (anchorEditor.returnValue !== "confirmed") {
+    anchorLayer = undefined;
+    updateControls();
+    status("足元の指定をキャンセルしました。");
+  }
+});
 function pickAnchor(point) {
   const layer = selectedLayer();
   if (!layer || layer.id !== anchorLayer) return false;
   if (hitTest(layer, point)) {
-    setAnchor(layer, imagePoint(layer, point));
-    status("足元を設定しました。2本指で拡大・縮小しても足元が固定されます。");
+    const { x, y } = imagePoint(layer, point);
+    anchorDraft = { layer, x: x * layer.bitmap.width, y: y * layer.bitmap.height };
+    drawAnchorDetail();
+    anchorEditor.returnValue = "";
+    anchorEditor.showModal();
   } else {
     status("選択枠の内側で靴底をタップしてください。");
   }
