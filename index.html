@@ -58,6 +58,21 @@
 </div>
 <p id="perspective-status" class="hint"></p>
 </details>
+<dialog id="anchor-editor" aria-labelledby="anchor-editor-title">
+<p id="anchor-editor-title">足元の位置を微調整</p>
+<p class="hint">拡大画像をタップ、または矢印で十字を靴底に合わせます。</p>
+<canvas id="anchor-detail" width="256" height="192" aria-label="足元の拡大画像と位置マーカー"></canvas>
+<div class="controls" role="group" aria-label="足元の位置を微調整">
+<button type="button" data-anchor-step="left" aria-label="左へ">←</button>
+<button type="button" data-anchor-step="up" aria-label="上へ">↑</button>
+<button type="button" data-anchor-step="down" aria-label="下へ">↓</button>
+<button type="button" data-anchor-step="right" aria-label="右へ">→</button>
+</div>
+<div class="controls">
+<button id="confirm-anchor" type="button">この位置に決定</button>
+<button id="cancel-anchor" type="button">キャンセル</button>
+</div>
+</dialog>
 <p id="status" role="status"></p>
 <p id="offline-status" class="hint" role="status">オフライン利用の準備を確認しています…</p>
 <section class="library" aria-label="作品別キャラクターライブラリ">
