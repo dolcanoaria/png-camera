@@ -40,6 +40,24 @@
 <a id="download" hidden>写真をもう一度保存</a>
 </div>
 <p class="hint">キャラをタップして選択。1本指で移動、2本指で拡大・縮小・回転。最大3人まで追加できます。選択枠は保存画像に入りません。</p>
+<details class="library">
+<summary>足元の設定</summary>
+<div class="controls">
+<button id="anchor" type="button" aria-pressed="false" disabled>足元を指定</button>
+<button id="clear-anchor" type="button" disabled>足元の指定を解除</button>
+<button id="shadow" type="button" aria-pressed="false" disabled>足元の影をオン</button>
+</div>
+</details>
+<details class="library">
+<summary>遠近感に合わせる</summary>
+<p class="hint">足元を指定したキャラを同じ床面の手前と奥に置き、それぞれ自然な大きさにしてから登録してください。</p>
+<div class="controls">
+<button id="perspective-near" type="button" disabled>今の位置と大きさを手前に登録</button>
+<button id="perspective-far" type="button" disabled>今の位置と大きさを奥に登録</button>
+<button id="clear-perspective" type="button" disabled>遠近感の設定を解除</button>
+</div>
+<p id="perspective-status" class="hint"></p>
+</details>
 <p id="status" role="status"></p>
 <p id="offline-status" class="hint" role="status">オフライン利用の準備を確認しています…</p>
 <section class="library" aria-label="作品別キャラクターライブラリ">
