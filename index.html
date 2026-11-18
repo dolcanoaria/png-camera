@@ -11,6 +11,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="icon" href="icons/icon-192.png" sizes="192x192">
 <link rel="stylesheet" href="style.css">
+<script defer src="storage.js"></script>
 <script defer src="camera.js"></script>
 <script defer src="library.js"></script>
 <script defer src="pwa.js"></script>
@@ -38,7 +39,9 @@
 <button id="remove" disabled>選択中を外す</button>
 <button id="capture" disabled>合成写真を保存</button>
 <a id="download" hidden>写真をもう一度保存</a>
+<button id="share-photo" type="button" hidden>完成写真を共有・保存先を選ぶ</button>
 </div>
+<p class="hint">完成写真の推奨保存先：Pictures/PNGCamera/Exports。通常ダウンロードはChromeの保存先に入ります。共有先アプリが対応していれば保存場所を選べます。</p>
 <p class="hint">キャラをタップして選択。1本指で移動、2本指で拡大・縮小・回転。最大3人まで追加できます。選択枠は保存画像に入りません。</p>
 <details class="library">
 <summary>足元の設定</summary>
@@ -77,7 +80,7 @@
 <p id="offline-status" class="hint" role="status">オフライン利用の準備を確認しています…</p>
 <section class="library" aria-label="作品別キャラクターライブラリ">
 <h2>作品別キャラクターライブラリ</h2>
-<p class="hint">端末内に保存したPNGを選んで追加できます。既存のライブラリは引き継がれます。</p>
+<p class="hint">推奨原本保存先：Pictures/PNGCamera/Characters または Frames。端末内に保存したPNGを選んで追加できます。既存のライブラリは引き継がれます。</p>
 <div class="library-selects">
 <label>作品<select id="work"></select></label>
 <label>キャラクター<select id="character"></select></label>
@@ -104,7 +107,7 @@
 <div class="controls"><button id="cutout-ai-select" disabled>AI用に対象を囲む</button><button id="cutout-ai-run" disabled>AIで切り抜く（オンライン）</button></div>
 <p class="hint">AI試作：画像を読み込み、「AI用に対象を囲む」を押して対象全体を指で四角く囲み、「AIで切り抜く」を押します。初回はAIモデルのダウンロードに時間がかかります。進行状況と失敗理由を画面下に表示します。AI処理は端末内で実行されますが、モデルの取得に通信が必要です。うまく動かない場合は従来の手動編集を使用してください。</p>
 <div class="cutout-view"><canvas id="cutout-canvas" width="480" height="360" aria-label="切り抜き編集画面"></canvas></div>
-<div class="controls"><button id="cutout-undo" disabled>1つ戻す</button><button id="cutout-reset">切り抜きをリセット</button><button id="cutout-save" disabled>透過PNGを保存</button></div>
+<div class="controls"><button id="cutout-undo" disabled>1つ戻す</button><button id="cutout-reset">切り抜きをリセット</button><button id="cutout-save" disabled>透過PNGを保存</button><button id="cutout-share" disabled>透過PNGを共有・保存先を選ぶ</button></div>
 <div class="library-selects"><label>登録する作品名<input id="cutout-work" type="text" placeholder="例：文豪ストレイドッグス"></label><label>キャラクター名<input id="cutout-name" type="text" placeholder="例：太宰治.png"></label><button id="cutout-register" disabled>作品別ライブラリに登録</button></div>
 <p id="cutout-status" role="status"></p>
 </section>
