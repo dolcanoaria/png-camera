@@ -31,7 +31,7 @@
 <div id="empty">カメラを起動するか背景写真を選んでください</div>
 </section>
 <div class="controls">
-<label class="picker">透過PNGを追加<input id="file" type="file" accept="image/png,.png" aria-label="透過PNGを追加"></label>
+<label class="picker">ファイルから透過PNGを追加<input id="file" type="file" aria-label="ファイルから透過PNGを追加"></label>
 <label class="layer-picker">操作するキャラ<select id="layer-select" aria-label="操作するキャラクター"></select></label>
 <button id="front" disabled>一番手前へ</button>
 <button id="back" disabled>一番奥へ</button>
@@ -41,6 +41,7 @@
 <a id="download" hidden>写真をもう一度保存</a>
 <button id="share-photo" type="button" hidden>完成写真を共有・保存先を選ぶ</button>
 </div>
+<p class="hint">Androidでは「ファイルから透過PNGを追加」から Pictures/PNGCamera/Characters を開いてください。最初に表示されるフォルダはAndroid側で決まります。PNG以外のファイルは読み込めません。</p>
 <p class="hint">完成写真の推奨保存先：Pictures/PNGCamera/Exports。通常ダウンロードはChromeの保存先に入ります。共有先アプリが対応していれば保存場所を選べます。</p>
 <p class="hint">キャラをタップして選択。1本指で移動、2本指で拡大・縮小・回転。最大3人まで追加できます。選択枠は保存画像に入りません。</p>
 <details class="library">
