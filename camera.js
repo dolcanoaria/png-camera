@@ -587,14 +587,14 @@ capture.addEventListener("click", () => {
     status("合成写真を作成しました。元の写真は変更されません。Chromeのダウンロードで確認できます。");
   }, "image/jpeg", .94);
 });
-sharePhoto.addEventListener("click", async () => {
-  if (!latestPhotoBlob) return;
+sharePhoto.addEventListener("click", () => {
+  if (!latestPhotoBlob) {status("先に合成写真を保存してください。");return;}
+  status("Androidの共有画面を呼び出しています…");
   try {
-    await PNGCameraStorage.share(latestPhotoBlob, latestPhotoName);
-    status("共有画面を閉じました。保存できたかは共有先アプリで確認してください。");
-  } catch (error) {
-    if (error?.name !== "AbortError") status(error.message);
-  }
+    PNGCameraStorage.share(latestPhotoBlob,latestPhotoName)
+      .then(()=>status("共有画面を閉じました。保存結果は共有先で確認してください。"))
+      .catch(error=>status(PNGCameraStorage.error(error)));
+  } catch(error) {status(PNGCameraStorage.error(error));}
 });
 window.addEventListener("pagehide", (event) => {
   if (event.persisted) { stopCamera(); return; }
