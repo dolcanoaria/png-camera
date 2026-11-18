@@ -308,7 +308,7 @@
       sctx.clearRect(0,0,source.width,source.height);sctx.drawImage(bitmap,0,0,source.width,source.height);bitmap.close();
       mctx.globalCompositeOperation="source-over";mctx.fillStyle="white";mctx.fillRect(0,0,mask.width,mask.height);
       state.loaded=true;state.undo=[];state.selection=null;state.selecting=false;state.lasso=false;state.lassoPoints=[];$("cutout-ai-select").disabled=false;$("cutout-ai-run").disabled=true;state.sourceName=file.name.replace(/\.[^.]+$/,"");
-      $("cutout-undo").disabled=true;$("cutout-save").disabled=false;$("cutout-register").disabled=false;
+      $("cutout-undo").disabled=true;$("cutout-save").disabled=false;$("cutout-share").disabled=false;$("cutout-register").disabled=false;
       render();message("写真を読み込みました。『背景をタップ』で背景色のつながった領域を消すか、消しゴムで不要部分をなぞってください。");
     } catch {message("画像を開けませんでした。JPEGまたはPNGを選んでください。");}
   });
@@ -407,6 +407,14 @@
   function downloadBlob(blob,name) {
     const url=URL.createObjectURL(blob),link=document.createElement("a");link.href=url;link.download=name;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
   }
+  $("cutout-share").addEventListener("click",async()=>{
+    try {
+      await PNGCameraStorage.share(await pngBlob(),`${state.sourceName}-cutout.png`);
+      message("共有画面を閉じました。保存できたかは共有先アプリで確認してください。");
+    } catch(error) {
+      if(error?.name!=="AbortError") message(`共有できませんでした：${error.message}`);
+    }
+  });
   $("cutout-save").addEventListener("click",async()=>{
     try {downloadBlob(await pngBlob(),`${state.sourceName}-cutout.png`);message("透過PNGを保存しました。端末のダウンロードを確認してください。");}
     catch {message("保存できませんでした。容量を確認してください。");}
