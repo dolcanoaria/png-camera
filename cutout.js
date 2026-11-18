@@ -407,13 +407,14 @@
   function downloadBlob(blob,name) {
     const url=URL.createObjectURL(blob),link=document.createElement("a");link.href=url;link.download=name;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
   }
-  $("cutout-share").addEventListener("click",async()=>{
+  $("cutout-share").addEventListener("click",()=>{
+    message("Androidの共有画面を呼び出しています…");
     try {
-      await PNGCameraStorage.share(await pngBlob(),`${state.sourceName}-cutout.png`);
-      message("共有画面を閉じました。保存できたかは共有先アプリで確認してください。");
-    } catch(error) {
-      if(error?.name!=="AbortError") message(`共有できませんでした：${error.message}`);
-    }
+      const blob=PNGCameraStorage.canvasPngBlobSync(canvas);
+      const result=PNGCameraStorage.share(blob,`${state.sourceName}-cutout.png`);
+      result.then(()=>message("共有画面を閉じました。保存結果は共有先で確認してください。"))
+        .catch(error=>message(PNGCameraStorage.error(error)));
+    } catch(error) {message(PNGCameraStorage.error(error));}
   });
   $("cutout-save").addEventListener("click",async()=>{
     try {downloadBlob(await pngBlob(),`${state.sourceName}-cutout.png`);message("透過PNGを保存しました。端末のダウンロードを確認してください。");}
