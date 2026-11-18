@@ -7,6 +7,9 @@ const context = preview.getContext("2d", { alpha: false });
 const camera = byId("camera");
 const capture = byId("capture");
 const download = byId("download");
+const sharePhoto = byId("share-photo");
+let latestPhotoBlob = null;
+let latestPhotoName = "";
 const layerSelect = byId("layer-select");
 const anchorButton = byId("anchor");
 const clearAnchorButton = byId("clear-anchor");
@@ -577,9 +580,21 @@ capture.addEventListener("click", () => {
     photoUrl = URL.createObjectURL(blob);
     download.href = photoUrl;
     download.download = "png-camera-" + new Date().toISOString().replace(/[:.]/g, "-") + ".jpg";
+    latestPhotoBlob = blob;
+    latestPhotoName = download.download;
+    sharePhoto.hidden = false;
     download.hidden = false; download.click();
     status("合成写真を作成しました。元の写真は変更されません。Chromeのダウンロードで確認できます。");
   }, "image/jpeg", .94);
+});
+sharePhoto.addEventListener("click", async () => {
+  if (!latestPhotoBlob) return;
+  try {
+    await PNGCameraStorage.share(latestPhotoBlob, latestPhotoName);
+    status("共有画面を閉じました。保存できたかは共有先アプリで確認してください。");
+  } catch (error) {
+    if (error?.name !== "AbortError") status(error.message);
+  }
 });
 window.addEventListener("pagehide", (event) => {
   if (event.persisted) { stopCamera(); return; }
