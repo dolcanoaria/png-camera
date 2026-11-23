@@ -10,6 +10,7 @@ const download = byId("download");
 const sharePhoto = byId("share-photo");
 let latestPhotoBlob = null;
 let latestPhotoName = "";
+let backgroundExif = {};
 const layerSelect = byId("layer-select");
 const anchorButton = byId("anchor");
 const clearAnchorButton = byId("clear-anchor");
@@ -246,7 +247,7 @@ camera.addEventListener("click", async () => {
     video.srcObject = opened;
     await video.play();
     if (request !== cameraRequest) return;
-    if (background) { background.close(); background = undefined; backgroundRequest++; }
+    if (background) { background.close(); background = undefined; backgroundRequest++; backgroundExif = {}; }
     resizePreview();
     starting = false; updateControls(); loop();
     status("背面カメラで撮影できます。");
@@ -273,8 +274,11 @@ byId("background-file").addEventListener("change", async (event) => {
     if (!file.type.startsWith("image/")) throw new Error("Not an image");
     const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
     if (request !== backgroundRequest) { bitmap.close(); return; }
+    const metadata = await PNGCameraExif.fromFile(file);
+    if (request !== backgroundRequest) { bitmap.close(); return; }
     stopCamera();
     background?.close(); background = bitmap;
+    backgroundExif = metadata;
     setPreviewDimensions(bitmap.width, bitmap.height);
     updateControls(); status("背景写真を読み込みました。キャラクターを配置して保存できます。");
   } catch {
@@ -282,7 +286,7 @@ byId("background-file").addEventListener("change", async (event) => {
   }
 });
 byId("clear-background").addEventListener("click", () => {
-  backgroundRequest++; background?.close(); background = undefined;
+  backgroundRequest++; background?.close(); background = undefined; backgroundExif = {};
   clearPerspective();
   points.clear(); gestureLayer = null;
   updateControls(); paint(); status("背景写真を外しました。");
@@ -567,15 +571,28 @@ for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {
   });
 }
 
-capture.addEventListener("click", () => {
+capture.addEventListener("click", async () => {
   if (!hasBackground() || saving) return;
   saving = true; updateControls();
+  const usingBackground = !!background;
+  const sourceExif = usingBackground ? {...backgroundExif} : {};
+  // Capture date is the original photo's date for imported JPEGs, or shutter time for live camera.
+  const date = sourceExif.date || PNGCameraExif.dateString(new Date());
   const photo = document.createElement("canvas");
   photo.width = preview.width; photo.height = preview.height;
   draw(photo.getContext("2d", { alpha: false }), photo.width, photo.height, false);
-  photo.toBlob((blob) => {
-    saving = false; updateControls();
-    if (!blob) { status("写真を作成できませんでした。もう一度お試しください。"); return; }
+  try {
+    const raw = await new Promise(resolve => photo.toBlob(resolve, "image/jpeg", .94));
+    if (!raw) throw new Error("JPEGの作成に失敗しました");
+    let gps = Number.isFinite(sourceExif.lat) && Number.isFinite(sourceExif.lon)
+      ? {lat:sourceExif.lat,lon:sourceExif.lon} : null;
+    // For camera captures, request current position. For an imported photo without GPS,
+    // do not substitute the phone's current position (it may be a different place).
+    if (!usingBackground && !gps) {
+      status("位置情報を取得しています。許可すると撮影場所をJPEGに記録します…");
+      gps = await PNGCameraExif.locate();
+    }
+    const blob = await PNGCameraExif.write(raw,{date,...gps});
     if (photoUrl) URL.revokeObjectURL(photoUrl);
     photoUrl = URL.createObjectURL(blob);
     download.href = photoUrl;
@@ -584,8 +601,13 @@ capture.addEventListener("click", () => {
     latestPhotoName = download.download;
     sharePhoto.hidden = false;
     download.hidden = false; download.click();
-    status("合成写真を作成しました。元の写真は変更されません。Chromeのダウンロードで確認できます。");
-  }, "image/jpeg", .94);
+    status(gps ? "EXIF撮影日時とGPSを記録したJPEGを保存しました。" :
+      "EXIF撮影日時付きJPEGを保存しました。GPSはありません（位置情報の許可または元写真のGPSを確認してください）。");
+  } catch (error) {
+    status("写真の保存に失敗しました: " + error.message);
+  } finally {
+    saving = false; updateControls();
+  }
 });
 sharePhoto.addEventListener("click", () => {
   if (!latestPhotoBlob) {status("先に合成写真を保存してください。");return;}
