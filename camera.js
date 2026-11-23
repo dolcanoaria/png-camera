@@ -266,12 +266,15 @@ camera.addEventListener("click", async () => {
 video.addEventListener("resize", resizePreview);
 video.addEventListener("loadeddata", updateControls);
 
-byId("background-file").addEventListener("change", async (event) => {
-  const file = event.target.files[0]; event.target.value = "";
+async function loadBackgroundFile(file, documentMode = false) {
   if (!file) return;
   const request = ++backgroundRequest;
   try {
-    if (!file.type.startsWith("image/")) throw new Error("Not an image");
+    if (documentMode && !(/\.jpe?g$/i.test(file.name) || /image\/jpeg/i.test(file.type))) {
+      status("JPEGファイルを指定してください。PNGなどは通常の『背景写真を選ぶ』から読み込めます。");
+      return;
+    }
+    if (!file.type.startsWith("image/") && !/\.(jpe?g|png|webp)$/i.test(file.name)) throw new Error("Not an image");
     const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
     if (request !== backgroundRequest) { bitmap.close(); return; }
     const metadata = await PNGCameraExif.fromFile(file);
@@ -283,11 +286,18 @@ byId("background-file").addEventListener("change", async (event) => {
     updateControls();
     const hasGPS = Number.isFinite(metadata.lat) && Number.isFinite(metadata.lon);
     const hasDate = !!metadata.date;
-    status(`背景写真を読み込みました。受信ファイル: ${file.type || "種類不明"} / ${Math.round(file.size/1024)}KB。EXIF: 撮影日時${hasDate ? "あり" : "なし"}、GPS${hasGPS ? "あり" : "なし"}。`);
+    status(`${documentMode ? "ファイル選択" : "写真選択"}で背景を読み込みました。ファイル: ${file.name || "名前不明"} / ${file.type || "種類不明"} / ${Math.round(file.size/1024)}KB。EXIF: 撮影日時${hasDate ? "あり" : "なし"}、GPS${hasGPS ? "あり" : "なし"}。`);
   } catch {
     if (request === backgroundRequest) status("背景写真を読み込めませんでした。JPEGやPNGなどの画像を選んでください。");
   }
-});
+}
+for (const [id, documentMode] of [["background-file", false], ["background-document", true]]) {
+  byId(id).addEventListener("change", async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    await loadBackgroundFile(file, documentMode);
+  });
+}
 byId("clear-background").addEventListener("click", () => {
   backgroundRequest++; background?.close(); background = undefined; backgroundExif = {};
   clearPerspective();
