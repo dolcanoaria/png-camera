@@ -24,8 +24,10 @@
 <div class="controls" role="group" aria-label="背景の選択">
 <button id="camera">背面カメラを起動</button>
 <label class="picker">背景写真を選ぶ<input id="background-file" type="file" accept="image/*" aria-label="背景にする写真を選ぶ"></label>
+<label class="picker">JPEGファイルを開く<input id="background-document" type="file" aria-label="ファイルから背景JPEGを選ぶ"></label>
 <button id="clear-background" disabled>写真を外す</button>
 </div>
+<p class="hint">GPS確認用：「JPEGファイルを開く」はAndroidのファイル選択画面から元のJPEGを指定します。写真選択画面が出た場合は端末側の動作です。JPEG以外は読み込みません。</p>
 <section class="view" aria-label="撮影プレビュー">
 <video id="video" muted playsinline hidden></video>
 <canvas id="preview" width="720" height="960" aria-label="カメラまたは写真とPNGの合成プレビュー"></canvas>
