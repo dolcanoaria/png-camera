@@ -280,7 +280,10 @@ byId("background-file").addEventListener("change", async (event) => {
     background?.close(); background = bitmap;
     backgroundExif = metadata;
     setPreviewDimensions(bitmap.width, bitmap.height);
-    updateControls(); status("背景写真を読み込みました。キャラクターを配置して保存できます。");
+    updateControls();
+    const hasGPS = Number.isFinite(metadata.lat) && Number.isFinite(metadata.lon);
+    const hasDate = !!metadata.date;
+    status(`背景写真を読み込みました。受信ファイル: ${file.type || "種類不明"} / ${Math.round(file.size/1024)}KB。EXIF: 撮影日時${hasDate ? "あり" : "なし"}、GPS${hasGPS ? "あり" : "なし"}。`);
   } catch {
     if (request === backgroundRequest) status("背景写真を読み込めませんでした。JPEGやPNGなどの画像を選んでください。");
   }
@@ -593,6 +596,10 @@ capture.addEventListener("click", async () => {
       gps = await PNGCameraExif.locate();
     }
     const blob = await PNGCameraExif.write(raw,{date,...gps});
+    // Re-read the generated JPEG bytes before Android's download/share step.
+    const checked = await PNGCameraExif.fromFile(new File([blob], "exif-check.jpg", {type:"image/jpeg"}));
+    const savedGPS = Number.isFinite(checked.lat) && Number.isFinite(checked.lon);
+    const savedDate = !!checked.date;
     if (photoUrl) URL.revokeObjectURL(photoUrl);
     photoUrl = URL.createObjectURL(blob);
     download.href = photoUrl;
@@ -601,8 +608,9 @@ capture.addEventListener("click", async () => {
     latestPhotoName = download.download;
     sharePhoto.hidden = false;
     download.hidden = false; download.click();
-    status(gps ? "EXIF撮影日時とGPSを記録したJPEGを保存しました。" :
-      "EXIF撮影日時付きJPEGを保存しました。GPSはありません（位置情報の許可または元写真のGPSを確認してください）。");
+    status(`JPEG生成後の検査: 撮影日時${savedDate ? "あり" : "なし"}、GPS${savedGPS ? "あり" : "なし"}。` +
+      (gps && !savedGPS ? " EXIF書き込み・読み取り処理を確認してください。" :
+      (!gps && usingBackground ? " 背景写真の選択時点でGPSを取得できていません。" : "")));
   } catch (error) {
     status("写真の保存に失敗しました: " + error.message);
   } finally {
