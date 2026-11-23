@@ -1,7 +1,7 @@
 "use strict";
 // Version bump required whenever application shell changes.
-const CACHE = "png-camera-shell-v1.5.7";
-const SHELL = ["./", "./index.html", "./style.css", "./camera.js", "./storage.js", "./library.js", "./pwa.js", "./cutout.js", "./manifest.webmanifest", "./icons/icon-blue-192.png", "./icons/icon-blue-512.png"];
+const CACHE = "png-camera-shell-v1.5.8-exif";
+const SHELL = ["./", "./index.html", "./style.css", "./camera.js", "./photo-exif.js", "./storage.js", "./library.js", "./pwa.js", "./cutout.js", "./manifest.webmanifest", "./icons/icon-blue-192.png", "./icons/icon-blue-512.png"];
 const shellPaths = new Set(SHELL.map((path) => new URL(path, self.registration.scope).pathname));
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
