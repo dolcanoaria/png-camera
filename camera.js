@@ -22,7 +22,24 @@ const anchorEditor = byId("anchor-editor");
 const anchorDetail = byId("anchor-detail");
 const anchorContext = anchorDetail.getContext("2d");
 const points = new Map();
-const maxEdge = 1920;
+const previewMaxEdge = 1920;
+const resolutionSelect = byId("camera-resolution");
+const resolutions = { fhd: [1920,1080], qhd: [2560,1440], uhd: [3840,2160], max: [4000,3000] };
+const resolutionKey = "png-camera-resolution";
+try {
+  const saved = localStorage.getItem(resolutionKey);
+  if (Object.hasOwn(resolutions, saved)) resolutionSelect.value = saved;
+} catch {}
+resolutionSelect.addEventListener("change", () => {
+  try { localStorage.setItem(resolutionKey, resolutionSelect.value); } catch {}
+  status("解像度設定を変更しました。次回のカメラ起動・写真保存に適用します。");
+});
+function requestedResolution() { return resolutions[resolutionSelect.value] || resolutions.max; }
+function outputDimensions(width, height) {
+  const [w,h] = requestedResolution();
+  const ratio = Math.min(1, w / Math.max(width,height), h / Math.min(width,height));
+  return [Math.max(1,Math.round(width*ratio)), Math.max(1,Math.round(height*ratio))];
+}
 const maxLayers = 3;
 const layers = [];
 let stream, frame, photoUrl, background;
@@ -103,7 +120,8 @@ function updateLayerSelect() {
   layerSelect.disabled = !layers.length;
 }
 function updateControls() {
-  camera.disabled = starting;
+  camera.disabled = starting || saving;
+  resolutionSelect.disabled = starting || saving || !!stream;
   referenceToggle.disabled = !referenceImage;
   referenceToggle.textContent = referenceVisible ? "構図合わせをオフ" : "構図合わせをオン";
   referenceToggle.setAttribute("aria-pressed", String(referenceVisible));
@@ -197,7 +215,7 @@ function draw(target, width, height, showSelection = false) {
 function paint() { draw(context, preview.width, preview.height, true); }
 function loop() { paint(); frame = requestAnimationFrame(loop); }
 function setPreviewDimensions(width, height) {
-  const ratio = Math.min(1, maxEdge / Math.max(width, height));
+  const ratio = Math.min(1, previewMaxEdge / Math.max(width, height));
   const nextWidth = Math.max(1, Math.round(width * ratio));
   const nextHeight = Math.max(1, Math.round(height * ratio));
   if (preview.width !== nextWidth || preview.height !== nextHeight) clearPerspective();
@@ -232,11 +250,12 @@ camera.addEventListener("click", async () => {
   status("カメラへのアクセスを許可してください。");
   try {
     let opened;
+    const [requestedWidth, requestedHeight] = requestedResolution();
     try {
-      opened = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { exact: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } } });
+      opened = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { exact: "environment" }, width: { ideal: requestedWidth }, height: { ideal: requestedHeight } } });
     } catch (error) {
       if (error.name !== "OverconstrainedError") throw error;
-      opened = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } });
+      opened = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: "environment", width: { ideal: requestedWidth }, height: { ideal: requestedHeight } } });
     }
     if (request !== cameraRequest) { opened.getTracks().forEach((track) => track.stop()); return; }
     stream = opened;
@@ -250,7 +269,7 @@ camera.addEventListener("click", async () => {
     if (background) { background.close(); background = undefined; backgroundRequest++; backgroundExif = {}; }
     resizePreview();
     starting = false; updateControls(); loop();
-    status("背面カメラで撮影できます。");
+    status(`背面カメラで撮影できます。取得映像: ${video.videoWidth}×${video.videoHeight}。`);
   } catch (error) {
     if (request !== cameraRequest) return;
     stopCamera();
@@ -592,9 +611,10 @@ capture.addEventListener("click", async () => {
   // Capture date is the original photo's date for imported JPEGs, or shutter time for live camera.
   const date = sourceExif.date || PNGCameraExif.dateString(new Date());
   const photo = document.createElement("canvas");
-  photo.width = preview.width; photo.height = preview.height;
-  draw(photo.getContext("2d", { alpha: false }), photo.width, photo.height, false);
   try {
+    const [width,height] = outputDimensions(usingBackground ? background.width : video.videoWidth, usingBackground ? background.height : video.videoHeight);
+    photo.width = width; photo.height = height;
+    draw(photo.getContext("2d", { alpha: false }), width, height, false);
     const raw = await new Promise(resolve => photo.toBlob(resolve, "image/jpeg", .94));
     if (!raw) throw new Error("JPEGの作成に失敗しました");
     let gps = Number.isFinite(sourceExif.lat) && Number.isFinite(sourceExif.lon)
@@ -618,12 +638,13 @@ capture.addEventListener("click", async () => {
     latestPhotoName = download.download;
     sharePhoto.hidden = false;
     download.hidden = false; download.click();
-    status(`JPEG生成後の検査: 撮影日時${savedDate ? "あり" : "なし"}、GPS${savedGPS ? "あり" : "なし"}。` +
+    status(`保存解像度: ${photo.width}×${photo.height}。JPEG生成後の検査: 撮影日時${savedDate ? "あり" : "なし"}、GPS${savedGPS ? "あり" : "なし"}。` +
       (gps && !savedGPS ? " EXIF書き込み・読み取り処理を確認してください。" :
       (!gps && usingBackground ? " 背景写真の選択時点でGPSを取得できていません。" : "")));
   } catch (error) {
     status("写真の保存に失敗しました: " + error.message);
   } finally {
+    photo.width = photo.height = 1;
     saving = false; updateControls();
   }
 });
